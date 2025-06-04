@@ -5,4 +5,5 @@
     <img src="{{ asset('images/hp.png') }}" alt="HushPuppies" id="hp">
     <img src="{{ asset('images/cat.png') }}" alt="CAT" id="cat">
     <img src="{{ asset('images/tnf.png') }}" alt="TheNorthFace" id="tnf">
+    <img src="{{ asset('images/merrel.png') }}" alt="Merrell" id="merrell">
 </footer>

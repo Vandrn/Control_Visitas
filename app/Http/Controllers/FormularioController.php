@@ -88,103 +88,102 @@ class FormularioController extends Controller
         return response()->json($zonas);
     }
 
-public function obtenerTiendas($sk_pais, $zona)
-{
-    $query = 'SELECT dm.TIENDA, dm.UBICACION, a.GEO FROM `adoc-bi-dev.OPB.DIM_TIENDA` dm left join (select concat(dsm.LATITUD,",",replace(dsm.LONGITUD,"\'","")) GEO, dsm.PAIS_TIENDA from `adoc-bi-dev`.bi_lab.dim_store_master dsm where dsm.LATITUD not in (\'nan\')) a on dm.BV_PAIS_TIENDA = a.PAIS_TIENDA WHERE dm.SK_PAIS = @sk_pais AND dm.ZONA = @zona';
-    $queryJobConfig = $this->bigQuery->query($query)->parameters([
-        'sk_pais' => $sk_pais,
-        'zona' => $zona
-    ]);
-    $results = $this->bigQuery->runQuery($queryJobConfig);
+    public function obtenerTiendas($sk_pais, $zona)
+    {
+        $query = 'SELECT dm.TIENDA, dm.UBICACION, a.GEO FROM `adoc-bi-dev.OPB.DIM_TIENDA` dm left join (select concat(dsm.LATITUD,",",replace(dsm.LONGITUD,"\'","")) GEO, dsm.PAIS_TIENDA from `adoc-bi-dev`.bi_lab.dim_store_master dsm where dsm.LATITUD not in (\'nan\')) a on dm.BV_PAIS_TIENDA = a.PAIS_TIENDA WHERE dm.SK_PAIS = @sk_pais AND dm.ZONA = @zona';
+        $queryJobConfig = $this->bigQuery->query($query)->parameters([
+            'sk_pais' => $sk_pais,
+            'zona' => $zona
+        ]);
+        $results = $this->bigQuery->runQuery($queryJobConfig);
 
-    $tiendas = [];
-    foreach ($results->rows() as $row) {
-        $tiendas[] = [
-            'TIENDA' => $row['TIENDA'],
-            'UBICACION' => $row['UBICACION'],
-            'GEO' => $row['GEO'] ?? null  // Coordenadas: "lat,lng"
-        ];
+        $tiendas = [];
+        foreach ($results->rows() as $row) {
+            $tiendas[] = [
+                'TIENDA' => $row['TIENDA'],
+                'UBICACION' => $row['UBICACION'],
+                'GEO' => $row['GEO'] ?? null  // Coordenadas: "lat,lng"
+            ];
+        }
+
+        return response()->json($tiendas);
     }
-
-    return response()->json($tiendas);
-}
 
     /**
- * 🆕 MÉTODO MEJORADO: Subir imagen individual con validación estricta de 6MB
- */
-public function subirImagenIncremental(Request $request)
-{
-    try {
-        $fieldName = $request->input('field_name');
-        
-        if (!$request->hasFile('image')) {
-            return response()->json(['error' => 'No se recibió ninguna imagen'], 400);
-        }
+     * 🆕 MÉTODO MEJORADO: Subir imagen individual con validación estricta de 6MB
+     */
+    public function subirImagenIncremental(Request $request)
+    {
+        try {
+            $fieldName = $request->input('field_name');
 
-        $file = $request->file('image');
-        
-        // 🔒 VALIDACIÓN ESTRICTA DE TAMAÑO (6MB máximo)
-        $maxSizeBytes = 6 * 1024 * 1024; // 6MB
-        if ($file->getSize() > $maxSizeBytes) {
-            $sizeMB = round($file->getSize() / (1024 * 1024), 2);
-            return response()->json([
-                'error' => "Imagen demasiado grande: {$sizeMB}MB. Máximo permitido: 6MB"
-            ], 413);
-        }
+            if (!$request->hasFile('image')) {
+                return response()->json(['error' => 'No se recibió ninguna imagen'], 400);
+            }
 
-        // Verificar tipo de archivo
-        $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-        if (!in_array($file->getMimeType(), $allowedTypes)) {
-            return response()->json([
-                'error' => 'Tipo de archivo no permitido. Solo: JPEG, PNG, WebP'
-            ], 415);
-        }
+            $file = $request->file('image');
 
-        if (!session()->has('token_unico')) {
-            session(['token_unico' => \Illuminate\Support\Str::uuid()->toString()]);
-        }
+            // 🔒 VALIDACIÓN ESTRICTA DE TAMAÑO (6MB máximo)
+            $maxSizeBytes = 6 * 1024 * 1024; // 6MB
+            if ($file->getSize() > $maxSizeBytes) {
+                $sizeMB = round($file->getSize() / (1024 * 1024), 2);
+                return response()->json([
+                    'error' => "Imagen demasiado grande: {$sizeMB}MB. Máximo permitido: 6MB"
+                ], 413);
+            }
 
-        Log::info("📤 Subiendo imagen individual", [
-            'field_name' => $fieldName,
-            'original_size' => round($file->getSize() / (1024 * 1024), 2) . 'MB',
-            'mime_type' => $file->getMimeType()
-        ]);
+            // Verificar tipo de archivo
+            $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+            if (!in_array($file->getMimeType(), $allowedTypes)) {
+                return response()->json([
+                    'error' => 'Tipo de archivo no permitido. Solo: JPEG, PNG, WebP'
+                ], 415);
+            }
 
-        // 🚀 SUBIR CON COMPRESIÓN ADICIONAL EN SERVIDOR
-        $publicUrl = $this->uploadImageToCloudStorageOptimized($file, $fieldName);
+            if (!session()->has('token_unico')) {
+                session(['token_unico' => \Illuminate\Support\Str::uuid()->toString()]);
+            }
 
-        if ($publicUrl) {
-            // Guardar URL en sesión para uso posterior
-            session(["uploaded_images.{$fieldName}" => $publicUrl]);
-            
-            Log::info("✅ Imagen subida exitosamente", [
+            Log::info("📤 Subiendo imagen individual", [
                 'field_name' => $fieldName,
-                'url' => $publicUrl
+                'original_size' => round($file->getSize() / (1024 * 1024), 2) . 'MB',
+                'mime_type' => $file->getMimeType()
             ]);
-            
-            return response()->json([
-                'success' => true,
-                'url' => $publicUrl,
-                'field_name' => $fieldName,
-                'message' => 'Imagen subida correctamente',
-                'size_info' => 'Comprimida y optimizada'
-            ]);
-        } else {
-            return response()->json(['error' => 'Error al subir la imagen al storage'], 500);
-        }
 
-    } catch (\Exception $e) {
-        Log::error('❌ Error en subida incremental', [
-            'error' => $e->getMessage(),
-            'field_name' => $request->input('field_name'),
-            'trace' => $e->getTraceAsString()
-        ]);
-        
-        return response()->json([
-            'error' => 'Error interno: ' . $e->getMessage()
-        ], 500);
+            // 🚀 SUBIR CON COMPRESIÓN ADICIONAL EN SERVIDOR
+            $publicUrl = $this->uploadImageToCloudStorageOptimized($file, $fieldName);
+
+            if ($publicUrl) {
+                // Guardar URL en sesión para uso posterior
+                session(["uploaded_images.{$fieldName}" => $publicUrl]);
+
+                Log::info("✅ Imagen subida exitosamente", [
+                    'field_name' => $fieldName,
+                    'url' => $publicUrl
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'url' => $publicUrl,
+                    'field_name' => $fieldName,
+                    'message' => 'Imagen subida correctamente',
+                    'size_info' => 'Comprimida y optimizada'
+                ]);
+            } else {
+                return response()->json(['error' => 'Error al subir la imagen al storage'], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('❌ Error en subida incremental', [
+                'error' => $e->getMessage(),
+                'field_name' => $request->input('field_name'),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Error interno: ' . $e->getMessage()
+            ], 500);
+        }
     }
-}
 
     public function guardarSeccion(Request $request)
     {
@@ -233,23 +232,38 @@ public function subirImagenIncremental(Request $request)
                     $data[$key] = $value;
                 }
 
+                if (strpos($key, 'VAR_06_') !== false) {
+                    $data[$key] = is_numeric($value) ? floatval($value) : null;
+                }
+
                 if (strpos($key, 'FECHA_PLAN_') !== false) {
                     $data[$key] = (!empty($value) && strtotime($value)) ? $value : null;
                 }
             }
 
             // 🆕 USAR URLS DE IMÁGENES YA SUBIDAS EN SESIÓN (NO PROCESAR ARCHIVOS)
-$imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER', 'IMG_OBS_KPI'];
+            $imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER', 'IMG_OBS_KPI'];
 
-foreach ($imageFields as $fieldName) {
-    // ✅ Obtener URL de la sesión (ya subida incrementalmente)
-    $uploadedUrl = session("uploaded_images.{$fieldName}");
-    $data[$fieldName] = $uploadedUrl ?? null;
-    
-    Log::info("📎 Asignando URL para {$fieldName}: " . ($uploadedUrl ?? 'null'));
-}
+            foreach ($imageFields as $fieldName) {
+                // ✅ Obtener URL de la sesión (ya subida incrementalmente)
+                $uploadedUrl = session("uploaded_images.{$fieldName}");
+                $data[$fieldName] = $uploadedUrl ?? null;
 
-Log::info('📋 Data being inserted into BigQuery (URLs only):', $data);
+                Log::info("📎 Asignando URL para {$fieldName}: " . ($uploadedUrl ?? 'null'));
+            }
+
+            Log::info('📋 Data being inserted into BigQuery (URLs only):', $data);
+
+            // Validar variaciones KPI del 1 al 6
+            for ($i = 1; $i <= 6; $i++) {
+                $campo = 'VAR_06_0' . $i;
+                if (!$request->filled($campo) || !is_numeric($request->input($campo))) {
+                    return response()->json([
+                        'error' => "Debe ingresar una variación válida para KPI {$i}."
+                    ], 422);
+                }
+            }
+
 
             // Insertar en BigQuery
             $table = $this->bigQuery->dataset(env('BIGQUERY_DATASET'))->table(env('BIGQUERY_TABLE'));
@@ -258,7 +272,7 @@ Log::info('📋 Data being inserted into BigQuery (URLs only):', $data);
             if ($insertResponse->isSuccessful()) {
                 // 🧹 Limpiar sesión de imágenes después del guardado exitoso
                 session()->forget('uploaded_images');
-                
+
                 return response()->json(['message' => 'Formulario guardado correctamente.']);
             } else {
                 Log::error('Error al insertar datos en BigQuery:', ['errors' => $insertResponse->failedRows()]);
@@ -283,19 +297,19 @@ Log::info('📋 Data being inserted into BigQuery (URLs only):', $data);
 
             // Crear y comprimir imagen AGRESIVAMENTE
             $image = Image::make($file);
-            
+
             // Compresión ULTRA-AGRESIVA para evitar límites
             $maxWidth = 400;   // Reducido drásticamente
             $maxHeight = 400;  // Reducido drásticamente
-            
+
             $image->resize($maxWidth, $maxHeight, function ($constraint) {
                 $constraint->aspectRatio();
                 $constraint->upsize();
             });
-            
+
             // Compresión extrema
             $image->encode('jpg', 15); // Calidad muy baja
-            
+
             // Verificar tamaño y comprimir más si es necesario
             $imageSize = strlen($image->stream()->__toString());
             if ($imageSize > 100000) { // Si es mayor a 100KB
@@ -331,191 +345,194 @@ Log::info('📋 Data being inserted into BigQuery (URLs only):', $data);
 
             Log::info("Imagen subida exitosamente: {$filename} -> {$publicUrl}");
             return $publicUrl;
-
         } catch (\Exception $e) {
             Log::error('Cloud Storage Upload Error: ' . $e->getMessage());
             return null;
         }
     }
 
- /**
- * 🆕 SUBIDA OPTIMIZADA SIN INTERVENTION IMAGE (solo PHP nativo)
- */
-private function uploadImageToCloudStorageOptimized($file, $nombreCampo, $prefix = 'observaciones/')
-{
-    try {
-        if (!session()->has('token_unico')) {
-            session(['token_unico' => \Illuminate\Support\Str::uuid()->toString()]);
-        }
-        $tokenUnico = session('token_unico');
-
-        // 📏 Log tamaño original
-        $originalSize = $file->getSize() / (1024 * 1024);
-        Log::info("🔍 Procesando imagen con PHP nativo", [
-            'campo' => $nombreCampo,
-            'tamaño_original' => round($originalSize, 2) . 'MB'
-        ]);
-
-        // 🎨 COMPRESIÓN CON GD (PHP nativo)
-        $tempPath = $file->getRealPath();
-        $imageInfo = getimagesize($tempPath);
-        
-        if (!$imageInfo) {
-            throw new \Exception("No se pudo leer la información de la imagen");
-        }
-
-        // Crear imagen desde archivo según tipo
-        switch ($imageInfo['mime']) {
-            case 'image/jpeg':
-                $sourceImage = \imagecreatefromjpeg($tempPath);
-                break;
-            case 'image/png':
-                $sourceImage = \imagecreatefrompng($tempPath);
-                break;
-            case 'image/gif':
-                $sourceImage = \imagecreatefromgif($tempPath);
-                break;
-            case 'image/webp':
-                $sourceImage = \imagecreatefromwebp($tempPath);
-                break;
-            default:
-                throw new \Exception("Tipo de imagen no soportado: " . $imageInfo['mime']);
-        }
-
-        if (!$sourceImage) {
-            throw new \Exception("No se pudo crear la imagen desde el archivo");
-        }
-
-        // Obtener dimensiones originales
-        $originalWidth = imagesx($sourceImage);
-        $originalHeight = imagesy($sourceImage);
-
-        // Calcular nuevas dimensiones (máximo 800px)
-        $maxDimension = 800;
-        if ($originalWidth > $maxDimension || $originalHeight > $maxDimension) {
-            if ($originalWidth > $originalHeight) {
-                $newWidth = $maxDimension;
-                $newHeight = ($originalHeight * $maxDimension) / $originalWidth;
-            } else {
-                $newHeight = $maxDimension;
-                $newWidth = ($originalWidth * $maxDimension) / $originalHeight;
+    /**
+     * 🆕 SUBIDA OPTIMIZADA SIN INTERVENTION IMAGE (solo PHP nativo)
+     */
+    private function uploadImageToCloudStorageOptimized($file, $nombreCampo, $prefix = 'observaciones/')
+    {
+        try {
+            if (!session()->has('token_unico')) {
+                session(['token_unico' => \Illuminate\Support\Str::uuid()->toString()]);
             }
-        } else {
-            $newWidth = $originalWidth;
-            $newHeight = $originalHeight;
-        }
+            $tokenUnico = session('token_unico');
 
-        // Crear nueva imagen redimensionada
-        $resizedImage = imagecreatetruecolor($newWidth, $newHeight);
-        
-        // Mantener transparencia para PNG
-        if ($imageInfo['mime'] === 'image/png') {
-            imagealphablending($resizedImage, false);
-            imagesavealpha($resizedImage, true);
-            $transparent = imagecolorallocatealpha($resizedImage, 255, 255, 255, 127);
-            imagefill($resizedImage, 0, 0, $transparent);
-        }
-
-        // Redimensionar imagen
-        imagecopyresampled(
-            $resizedImage, $sourceImage,
-            0, 0, 0, 0,
-            $newWidth, $newHeight,
-            $originalWidth, $originalHeight
-        );
-
-        // 🗜️ COMPRIMIR ITERATIVAMENTE
-        $quality = 85;
-        $targetSizeBytes = 5 * 1024 * 1024; // 5MB target
-        $attempts = 0;
-        $maxAttempts = 8;
-        
-        do {
-            // Capturar output de imagen comprimida
-            ob_start();
-            \imagejpeg($resizedImage, null, $quality);
-            $imageData = ob_get_contents();
-            ob_end_clean();
-            
-            $currentSize = strlen($imageData);
-            
-            Log::info("🔄 Intento compresión nativa", [
-                'intento' => $attempts + 1,
-                'calidad' => $quality,
-                'tamaño_actual' => round($currentSize / (1024 * 1024), 2) . 'MB'
+            // 📏 Log tamaño original
+            $originalSize = $file->getSize() / (1024 * 1024);
+            Log::info("🔍 Procesando imagen con PHP nativo", [
+                'campo' => $nombreCampo,
+                'tamaño_original' => round($originalSize, 2) . 'MB'
             ]);
-            
-            if ($currentSize <= $targetSizeBytes) {
-                break; // ✅ Tamaño objetivo alcanzado
+
+            // 🎨 COMPRESIÓN CON GD (PHP nativo)
+            $tempPath = $file->getRealPath();
+            $imageInfo = getimagesize($tempPath);
+
+            if (!$imageInfo) {
+                throw new \Exception("No se pudo leer la información de la imagen");
             }
-            
-            // Reducir calidad
-            $quality = max(10, $quality - 15);
-            $attempts++;
-            
-        } while ($attempts < $maxAttempts);
 
-        // Limpiar memoria
-        imagedestroy($sourceImage);
-        imagedestroy($resizedImage);
+            // Crear imagen desde archivo según tipo
+            switch ($imageInfo['mime']) {
+                case 'image/jpeg':
+                    $sourceImage = \imagecreatefromjpeg($tempPath);
+                    break;
+                case 'image/png':
+                    $sourceImage = \imagecreatefrompng($tempPath);
+                    break;
+                case 'image/gif':
+                    $sourceImage = \imagecreatefromgif($tempPath);
+                    break;
+                case 'image/webp':
+                    $sourceImage = \imagecreatefromwebp($tempPath);
+                    break;
+                default:
+                    throw new \Exception("Tipo de imagen no soportado: " . $imageInfo['mime']);
+            }
 
-        $finalSizeMB = strlen($imageData) / (1024 * 1024);
-        
-        Log::info("📦 Compresión nativa finalizada", [
-            'tamaño_final' => round($finalSizeMB, 2) . 'MB',
-            'calidad_final' => $quality,
-            'compresión' => round((1 - $finalSizeMB / $originalSize) * 100, 1) . '%'
-        ]);
+            if (!$sourceImage) {
+                throw new \Exception("No se pudo crear la imagen desde el archivo");
+            }
 
-        // 🚨 VALIDACIÓN FINAL
-        if ($finalSizeMB > 5.5) {
-            throw new \Exception("Imagen aún muy grande: {$finalSizeMB}MB");
-        }
+            // Obtener dimensiones originales
+            $originalWidth = imagesx($sourceImage);
+            $originalHeight = imagesy($sourceImage);
 
-        // 🔤 GENERAR NOMBRE ÚNICO
-        $filename = sprintf(
-            '%s%s_%s_%s_%s.jpg',
-            $prefix,
-            $nombreCampo,
-            $tokenUnico,
-            time(),
-            substr(md5($imageData), 0, 8)
-        );
+            // Calcular nuevas dimensiones (máximo 800px)
+            $maxDimension = 800;
+            if ($originalWidth > $maxDimension || $originalHeight > $maxDimension) {
+                if ($originalWidth > $originalHeight) {
+                    $newWidth = $maxDimension;
+                    $newHeight = ($originalHeight * $maxDimension) / $originalWidth;
+                } else {
+                    $newHeight = $maxDimension;
+                    $newWidth = ($originalWidth * $maxDimension) / $originalHeight;
+                }
+            } else {
+                $newWidth = $originalWidth;
+                $newHeight = $originalHeight;
+            }
 
-        // ☁️ SUBIR A CLOUD STORAGE
-        $this->bucket->upload($imageData, [
-            'name' => $filename,
-            'metadata' => [
-                'contentType' => 'image/jpeg',
-                'cacheControl' => 'public, max-age=3600',
-                'customMetadata' => [
-                    'campo_formulario' => $nombreCampo,
-                    'session_id' => $tokenUnico,
-                    'tamaño_comprimido' => round($finalSizeMB, 2) . 'MB',
-                    'fecha_subida' => now()->toISOString()
+            // Crear nueva imagen redimensionada
+            $resizedImage = imagecreatetruecolor($newWidth, $newHeight);
+
+            // Mantener transparencia para PNG
+            if ($imageInfo['mime'] === 'image/png') {
+                imagealphablending($resizedImage, false);
+                imagesavealpha($resizedImage, true);
+                $transparent = imagecolorallocatealpha($resizedImage, 255, 255, 255, 127);
+                imagefill($resizedImage, 0, 0, $transparent);
+            }
+
+            // Redimensionar imagen
+            imagecopyresampled(
+                $resizedImage,
+                $sourceImage,
+                0,
+                0,
+                0,
+                0,
+                $newWidth,
+                $newHeight,
+                $originalWidth,
+                $originalHeight
+            );
+
+            // 🗜️ COMPRIMIR ITERATIVAMENTE
+            $quality = 85;
+            $targetSizeBytes = 5 * 1024 * 1024; // 5MB target
+            $attempts = 0;
+            $maxAttempts = 8;
+
+            do {
+                // Capturar output de imagen comprimida
+                ob_start();
+                \imagejpeg($resizedImage, null, $quality);
+                $imageData = ob_get_contents();
+                ob_end_clean();
+
+                $currentSize = strlen($imageData);
+
+                Log::info("🔄 Intento compresión nativa", [
+                    'intento' => $attempts + 1,
+                    'calidad' => $quality,
+                    'tamaño_actual' => round($currentSize / (1024 * 1024), 2) . 'MB'
+                ]);
+
+                if ($currentSize <= $targetSizeBytes) {
+                    break; // ✅ Tamaño objetivo alcanzado
+                }
+
+                // Reducir calidad
+                $quality = max(10, $quality - 15);
+                $attempts++;
+            } while ($attempts < $maxAttempts);
+
+            // Limpiar memoria
+            imagedestroy($sourceImage);
+            imagedestroy($resizedImage);
+
+            $finalSizeMB = strlen($imageData) / (1024 * 1024);
+
+            Log::info("📦 Compresión nativa finalizada", [
+                'tamaño_final' => round($finalSizeMB, 2) . 'MB',
+                'calidad_final' => $quality,
+                'compresión' => round((1 - $finalSizeMB / $originalSize) * 100, 1) . '%'
+            ]);
+
+            // 🚨 VALIDACIÓN FINAL
+            if ($finalSizeMB > 5.5) {
+                throw new \Exception("Imagen aún muy grande: {$finalSizeMB}MB");
+            }
+
+            // 🔤 GENERAR NOMBRE ÚNICO
+            $filename = sprintf(
+                '%s%s_%s_%s_%s.jpg',
+                $prefix,
+                $nombreCampo,
+                $tokenUnico,
+                time(),
+                substr(md5($imageData), 0, 8)
+            );
+
+            // ☁️ SUBIR A CLOUD STORAGE
+            $this->bucket->upload($imageData, [
+                'name' => $filename,
+                'metadata' => [
+                    'contentType' => 'image/jpeg',
+                    'cacheControl' => 'public, max-age=3600',
+                    'customMetadata' => [
+                        'campo_formulario' => $nombreCampo,
+                        'session_id' => $tokenUnico,
+                        'tamaño_comprimido' => round($finalSizeMB, 2) . 'MB',
+                        'fecha_subida' => now()->toISOString()
+                    ]
                 ]
-            ]
-        ]);
+            ]);
 
-        $publicUrl = sprintf(
-            'https://storage.cloud.google.com/%s/%s',
-            config('services.google.storage_bucket'),
-            $filename
-        );
+            $publicUrl = sprintf(
+                'https://storage.cloud.google.com/%s/%s',
+                config('services.google.storage_bucket'),
+                $filename
+            );
 
-        Log::info("🎉 Imagen subida con PHP nativo", [
-            'url' => $publicUrl,
-            'tamaño_final' => round($finalSizeMB, 2) . 'MB'
-        ]);
+            Log::info("🎉 Imagen subida con PHP nativo", [
+                'url' => $publicUrl,
+                'tamaño_final' => round($finalSizeMB, 2) . 'MB'
+            ]);
 
-        return $publicUrl;
-
-    } catch (\Exception $e) {
-        Log::error('❌ Error en subida nativa', [
-            'error' => $e->getMessage(),
-            'campo' => $nombreCampo
-        ]);
-        return null;
+            return $publicUrl;
+        } catch (\Exception $e) {
+            Log::error('❌ Error en subida nativa', [
+                'error' => $e->getMessage(),
+                'campo' => $nombreCampo
+            ]);
+            return null;
+        }
     }
-}
 }

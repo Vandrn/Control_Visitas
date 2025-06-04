@@ -455,7 +455,6 @@ $(document).ready(function () {
             "preg_04_05": "PREG_03_05",
             "preg_04_06": "PREG_03_06",
             "preg_04_07": "PREG_03_07",
-            "preg_04_08": "PREG_03_08",
             "obs_04_01": "OBS_03_01",
             "preg_05_01": "PREG_04_01",
             "preg_05_02": "PREG_04_02",
@@ -471,7 +470,6 @@ $(document).ready(function () {
             "preg_05_12": "PREG_04_12",
             "preg_05_13": "PREG_04_13",
             "preg_05_14": "PREG_04_14",
-            "preg_05_15": "PREG_04_15",
             "obs_05_01": "OBS_04_01",
             "preg_06_01": "PREG_05_01",
             "preg_06_02": "PREG_05_02",
@@ -506,6 +504,15 @@ $(document).ready(function () {
                 datos[control_visitas] = fieldValue;
             }
         });
+
+        // Agregar variaciones KPI al objeto datos
+        for (let i = 1; i <= 6; i++) {
+            let nombreCampo = `var_06_0${i}`;
+            let valor = $(`input[name="${nombreCampo}"]`).val();
+            if (valor !== "" && !isNaN(parseFloat(valor))) {
+                datos[`VAR_06_0${i}`] = parseFloat(valor);
+            }
+        }
 
         // Specifically check for plan fields
         $("input[name^='PLAN_'], input[name^='FECHA_PLAN_']").each(function () {
@@ -662,7 +669,7 @@ $(document).ready(function () {
             guardarSeccion(obtenerRespuestas());
             dataSaved = true;
 
-            mostrarNotificacion(`¡Formulario completado! Se enviaron ${totalImagenes} imágenes correctamente.`, 'sucess');
+            mostrarNotificacion(`¡Formulario completado! Se enviaron ${totalImagenes} imágenes correctamente.`, 'success');
             window.location.replace("/formulario");
             return;
         }
@@ -673,6 +680,29 @@ $(document).ready(function () {
             mostrarNotificacion('Por favor, complete todos los campos requeridos antes de continuar.', 'warning');
             inputsVisibles.find(input => !input.checkValidity())[0].reportValidity();
             return;
+        }
+
+        // Validar campos de variación de KPI si estamos en sección 6
+        if (indiceActual === secciones.indexOf("seccion-6")) {
+            let variacionesValidas = true;
+
+            for (let i = 1; i <= 6; i++) {
+                let input = $(`input[name='var_06_0${i}']`);
+                let valor = input.val();
+
+                // Validar que haya algo y sea número válido
+                if (valor === "" || isNaN(parseFloat(valor))) {
+                    input.addClass('input-error');
+                    variacionesValidas = false;
+                } else {
+                    input.removeClass('input-error');
+                }
+            }
+
+            if (!variacionesValidas) {
+                mostrarNotificacion('Por favor, ingrese valores numéricos válidos en todas las variaciones KPI.', 'warning');
+                return;
+            }
         }
 
         mostrarSeccion(++indiceActual);

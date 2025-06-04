@@ -33,7 +33,6 @@ $secciones = [
 "Artículos exhibidos con su etiqueta y precio correcto. Nota: Si un zapato llega dañado de fábrica reportarlo de inmediato y retírelo del piso de venta.",
 "Cambios de precio realizado, firmado y archivado. Nota: Es prohibido colocar otro precio que no sea el oficial.",
 "Promociones actualizadas y compartidas con todo el personal.",
-"Reporte 80/20 revisado semanalmente.",
 "Implementación de planogramas(Producto, POP, Manuales).",
 "En las exhibiciones están todos los estilos disponibles en la tienda representados por talla (sin ningún zapato dañado o sucio).",
 "Todas las sandalias en exhibidores y/o mesas usan modeladores acrílicos.",
@@ -42,7 +41,6 @@ $secciones = [
 ['seccion' => 5, 'titulo' => 'Personal', 'nombreCampo' => 'personal', 'preguntas' => [
 "Cumplimiento de las marcaciones (4 por día).",
 "Personal con imagen presentable, con su respectivo uniforme según política.",
-"Personal cumple los 5 estándares NO negociables (1. Bienvenida, 2. Mencionar la promoción vigente, 3. Ofrecer más de dos artículos, 4. Ofrecer accesorios, 5. Despedida y invitarlo a regresar).",
 "Amabilidad en el recibimiento de los clientes.",
 "Cumplimiento de protocolos de bioseguridad.",
 "Disponibilidad del personal para ayudar durante el recorrido, selección y prueba de calzado.",

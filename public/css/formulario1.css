@@ -18,7 +18,7 @@ body {
     margin-left: 5rem;
 }
 
-.subtema{
+.subtema {
     font-size: 40px;
     text-align: center;
     margin-left: 40%;
@@ -37,7 +37,8 @@ body {
     margin: 7% auto;
 }
 
-.pregunta, .fechas {
+.pregunta,
+.fechas {
     font-size: 27px;
     max-width: 90%;
     margin: 2rem auto;
@@ -47,12 +48,12 @@ body {
 
 .preguntas {
     font-size: 27px;
-    text-align: center; 
+    text-align: center;
     display: block;
     width: 100%;
 }
 
-.seleccion{
+.seleccion {
     font-size: 20px;
     text-align: center;
     width: 50%;
@@ -74,7 +75,7 @@ body {
 
 .kpi-container {
     display: grid;
-    grid-template-columns: repeat(2, 1fr); 
+    grid-template-columns: repeat(2, 1fr);
     gap: 20px;
     max-width: 1200px;
     margin: 0 auto;
@@ -97,8 +98,14 @@ body {
 .kpi-item {
     padding: 10px;
     border-radius: 5px;
-    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
 }
+
 
 .kpi-opciones {
     display: flex;
@@ -107,8 +114,35 @@ body {
     font-size: 20px;
 }
 
+.kpi-variacion {
+    margin-top: 10px;
+    width: 100%;
+    max-width: 250px;
+}
+
+.kpi-variacion label {
+    display: block;
+    text-align: center;
+    font-size: 0.95em;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 6px;
+}
+
+.kpi-variacion input[type="number"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    font-size: 16px;
+    text-align: center;
+    background-color: #f8f8f8;
+    box-shadow: 0px 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+
 .observaciones {
-    grid-column: span 1; 
+    grid-column: span 1;
     text-align: left;
     margin-top: 20px;
 }
@@ -141,7 +175,7 @@ body {
 .date-container input,
 .question-container input {
     width: 100%;
-    max-width: 400px; 
+    max-width: 400px;
     padding: 10px;
     font-size: 16px;
     border: 1px solid #ccc;
@@ -161,7 +195,7 @@ body {
 
 .radio-buttons {
     display: flex;
-    flex-wrap: wrap; 
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
     margin-left: 20%;
@@ -173,9 +207,9 @@ body {
     font-size: 25px;
 }
 
-.date-container label{
+.date-container label {
     display: flex;
-    flex-wrap: wrap; 
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
     margin-left: 20%;
@@ -229,10 +263,9 @@ textarea {
 }
 
 .file_container {
-    display: flex
-    ;
-        width: 100%;
-        justify-content: center;
+    display: flex;
+    width: 100%;
+    justify-content: center;
 }
 
 .footer {
@@ -249,13 +282,13 @@ textarea {
 }
 
 #ad {
-    width: 135px;
+    width: 85px;
     height: 33px;
     flex-shrink: 0;
 }
 
 #p2 {
-    width: 105px;
+    width: 85px;
     height: 33px;
     flex-shrink: 0;
 }
@@ -278,19 +311,28 @@ textarea {
     flex-shrink: 0;
 }
 
+#merrel {
+    width: 85px;
+    height: 33px;
+    flex-shrink: 0;
+}
+
 @media (max-width: 1024px) {
-    
-    #tema, .subtema, .titulo-intro {
+
+    #tema,
+    .subtema,
+    .titulo-intro {
         font-size: 24px;
     }
 
     .radio-buttons {
-        flex-wrap: nowrap; 
-        justify-content: center; 
+        flex-wrap: nowrap;
+        justify-content: center;
         margin-left: 10%;
     }
 
-    .pregunta, .fechas {
+    .pregunta,
+    .fechas {
         font-size: 20px;
     }
 
@@ -324,13 +366,18 @@ textarea {
         max-width: 250px;
     }
 
+    .footer {
+        display: flex;
+        align-items: center;
+    }
+
     #ad {
-        width: 77px;
+        width: 40px;
         height: 18px;
     }
 
     #p2 {
-        width: 60px;
+        width: 40px;
         height: 18px;
     }
 
@@ -346,6 +393,11 @@ textarea {
 
     #tnf {
         width: 39px;
+        height: 18px;
+    }
+
+    #merrel {
+        width: 40px;
         height: 18px;
     }
 }

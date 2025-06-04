@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{{ asset('css/formulario1.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="{{ asset('js/formulario1.js') }}" defer></script>
-    
+
     <!-- 📍 ESTILOS ADICIONALES PARA VALIDACIÓN DE DISTANCIA -->
     <style>
         .distance-validation {
@@ -18,39 +18,52 @@
             font-size: 14px;
             font-weight: 500;
             text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             animation: fadeIn 0.3s ease;
         }
-        
+
         .distance-success {
             background: #10b981;
             color: white;
             border-left: 4px solid #059669;
         }
-        
+
         .distance-danger {
             background: #ef4444;
             color: white;
             border-left: 4px solid #dc2626;
         }
-        
+
         .distance-warning {
             background: #f59e0b;
             color: white;
             border-left: 4px solid #d97706;
         }
-        
+
         .distance-info {
             background: #3b82f6;
             color: white;
             border-left: 4px solid #2563eb;
         }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+
+        .input-error {
+            border: 2px solid red;
+            background-color: #ffe6e6;
         }
-        
+
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         /* 📱 RESPONSIVE PARA MÓVILES */
         @media (max-width: 768px) {
             .distance-validation {
@@ -60,6 +73,7 @@
         }
     </style>
 </head>
+
 <body>
     @include ('partials.header')
     @include('partials.intro')
@@ -83,4 +97,5 @@
     </div>
     @include ('partials.footer')
 </body>
+
 </html>
