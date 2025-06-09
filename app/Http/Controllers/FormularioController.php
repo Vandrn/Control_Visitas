@@ -208,7 +208,7 @@ class FormularioController extends Controller
             ];
 
             $planesValidos = 0;
-            for ($i = 1; $i <= 5; $i++) {
+            for ($i = 1; $i <= 2; $i++) {
                 $plan = $request->input("PLAN_0$i");
                 $fecha = $request->input("FECHA_PLAN_0$i");
                 if (!empty($plan) && !empty($fecha)) {

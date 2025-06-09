@@ -621,7 +621,7 @@ $(document).ready(function () {
         if (!dataSaved && indiceActual === secciones.length - 1) {
             // Validar al menos un plan completo antes de enviar
             let planesValidos = 0;
-            for (let i = 1; i <= 5; i++) {
+            for (let i = 1; i <= 2; i++) {
                 const plan = document.querySelector(`input[name="PLAN_0${i}"]`);
                 const fecha = document.querySelector(`input[name="FECHA_PLAN_0${i}"]`);
                 if (plan && fecha && plan.value.trim() !== '' && fecha.value.trim() !== '') {
@@ -676,7 +676,7 @@ $(document).ready(function () {
 
         let hayError = inputsVisibles.some(input => !input.checkValidity());
 
-        if (hayError) {
+        if (false) {
             mostrarNotificacion('Por favor, complete todos los campos requeridos antes de continuar.', 'warning');
             inputsVisibles.find(input => !input.checkValidity())[0].reportValidity();
             return;

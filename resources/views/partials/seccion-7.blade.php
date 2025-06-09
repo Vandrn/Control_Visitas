@@ -1,11 +1,13 @@
 <!-- Séptima Parte: Plan de Acción -->
 <div id="seccion-7" style="display: none;">
-    <label class="subtema">Plan de Acción</label>
+    <<div class="subtema-wrapper">
+        <label class="subtema">Plan de Acción</label>
+    </div>
     <div class="plan-container">
         @php
         $numPregunta = 1;
         @endphp
-        @for ($i = 1; $i <= 5; $i++)
+        @for ($i = 1; $i <= 2; $i++)
             <div class="plan-item">
                 <div class="question-container">
                     <label class="pregunta">{{ $numPregunta }}. Plan de Acción n°{{ $i }}</label>

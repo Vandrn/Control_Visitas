@@ -1,8 +1,8 @@
 body {
-    background: #AAA;
+    background: #fffdfd;
     margin: 0;
     padding: 0;
-    text-align: left;
+    font-family: Arial, Helvetica, sans-serif;
 }
 
 .logo {
@@ -12,34 +12,61 @@ body {
 }
 
 #tema {
-    max-width: 470px;
-    font-size: 40px;
-    font-weight: 400;
+    max-width: 400px;
+    font-weight: 300;
     margin-left: 5rem;
 }
 
+.header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 1rem 2rem;
+}
+
+.titulo-header {
+    font-size: 35px;
+    font-weight: bold;
+    margin: 0;
+    color: #000;
+    white-space: nowrap;
+}
+
 .subtema {
-    font-size: 40px;
+    font-size: 28px;
+    font-weight: bold;
+    color: #222;
     text-align: center;
-    margin-left: 40%;
+    text-transform: uppercase;
+    padding-bottom: 6px;
+    margin: 2rem auto 1rem;
+    border-bottom: 3px solid #e6b200;
+    display: inline-block;
 }
 
+.subtema-wrapper {
+    text-align: center;
+    width: 100%;
+}
+
+.introduccion p,
 .titulo-intro {
-    font-size: 30px;
-    text-align: center;
-    margin: 0 auto;
-}
-
-.introduccion p {
-    font-size: 30px;
+    font-size: 24px;
     max-width: 90%;
     text-align: center;
     margin: 7% auto;
 }
 
+.contenedor-centrado {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 0 1rem;
+    text-align: center;
+}
+
 .pregunta,
 .fechas {
-    font-size: 27px;
+    font-size: 20px;
     max-width: 90%;
     margin: 2rem auto;
     text-align: left;
@@ -47,7 +74,7 @@ body {
 }
 
 .preguntas {
-    font-size: 27px;
+    font-size: 20px;
     text-align: center;
     display: block;
     width: 100%;
@@ -185,26 +212,61 @@ body {
 .boton {
     width: 193px;
     height: 55px;
+    border: none;
     border-radius: 6px;
-    background: #D9D9D9;
+    background: #e6b200;
     font-size: 25px;
+    font-weight: 500;
     margin: 2rem auto;
     display: block;
     cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
+
+.boton:hover {
+    background-color: #f0c53f;
+    transform: scale(1.03);
+}
+
 
 .radio-buttons {
     display: flex;
+    justify-content: center;
     flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-    margin-left: 20%;
+    gap: 15px;
+    margin: 1rem auto;
+}
+
+.radio-buttons input[type="radio"] {
+    display: none;
 }
 
 .radio-buttons label {
     display: flex;
+    justify-content: center;
     align-items: center;
-    font-size: 25px;
+    width: 60px;
+    height: 45px;
+    font-size: 18px;
+    border: 2px solid #e6b200;
+    border-radius: 6px;
+    color: #e6b200;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s, transform 0.2s ease;
+    user-select: none;
+}
+
+.radio-buttons label:hover {
+    background-color: #fff5cc;
+    transform: scale(1.05);
+}
+
+.radio-buttons input[type="radio"]:checked+label {
+    background-color: #e6b200;
+    color: #fff;
+    font-weight: bold;
+    border-color: #e6b200;
 }
 
 .date-container label {
@@ -213,6 +275,11 @@ body {
     align-items: center;
     gap: 10px;
     margin-left: 20%;
+}
+
+select {
+    height: 45px;
+    line-height: 45px;
 }
 
 .form-group,
@@ -231,16 +298,31 @@ body {
 
 .form-group input[type="email"],
 .form-group input[type="text"],
+input[type="number"],
+select,
 .observaciones textarea {
+    width: 90%;
     max-width: 500px;
-    margin: 0 auto;
+    padding: 12px;
+    font-size: 16px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    background-color: #f8f8f8;
+    color: #333;
+    margin: 0 auto 1rem;
     display: block;
-    resize: none;
+    box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.05);
+    transition: border 0.3s ease, box-shadow 0.3s ease;
 }
 
-.form-group input[type="email"],
-.form-group input[type="text"] {
-    width: 100%;
+.form-group input[type="email"]:focus,
+.form-group input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus,
+.observaciones textarea:focus {
+    border-color: #e6b200;
+    box-shadow: 0 0 8px rgba(230, 178, 0, 0.3);
+    outline: none;
 }
 
 .form-group input[type="file"],
@@ -248,19 +330,56 @@ body {
     margin-top: 10px;
 }
 
+::placeholder {
+    color: #999;
+    font-style: italic;
+    opacity: 1;
+}
+
+.plan-container input[type="text"],
+.plan-container input[type="date"] {
+    width: 100%;
+    max-width: 500px;
+    padding: 12px;
+    font-size: 16px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    background-color: #f8f8f8;
+    color: #333;
+    box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.05);
+    transition: border 0.3s ease, box-shadow 0.3s ease;
+}
+
+.plan-container input[type="text"]:focus,
+.plan-container input[type="date"]:focus {
+    border-color: #e6b200;
+    box-shadow: 0 0 8px rgba(230, 178, 0, 0.3);
+    outline: none;
+}
+
 textarea {
     width: 90%;
     max-width: 600px;
-    height: 100px;
+    height: 120px;
     padding: 15px;
-    max-height: 100px;
     font-size: 16px;
-    border-radius: 6px;
+    border-radius: 10px;
     border: 1px solid #ccc;
-    margin-left: 20%;
+    background-color: #f8f8f8;
+    color: #333;
+    margin: 0 auto 1rem;
+    display: block;
     outline: none;
-    resize: none;
+    resize: vertical;
+    box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.05);
+    transition: border 0.3s ease, box-shadow 0.3s ease;
 }
+
+textarea:focus {
+    border-color: #e6b200;
+    box-shadow: 0 0 8px rgba(230, 178, 0, 0.3);
+}
+
 
 .file_container {
     display: flex;
@@ -319,10 +438,20 @@ textarea {
 
 @media (max-width: 1024px) {
 
-    #tema,
     .subtema,
     .titulo-intro {
         font-size: 24px;
+    }
+
+    .header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .titulo-header {
+        font-size: 28px;
+        white-space: normal;
     }
 
     .radio-buttons {
@@ -334,6 +463,10 @@ textarea {
     .pregunta,
     .fechas {
         font-size: 20px;
+        max-width: 90%;
+        margin: 1.5rem auto;
+        text-align: left;
+        display: block;
     }
 
     .texto {
@@ -351,6 +484,7 @@ textarea {
         width: 150px;
         height: 45px;
         cursor: pointer;
+        background: #e6b200;
     }
 
     .plan-item {
@@ -382,7 +516,7 @@ textarea {
     }
 
     #hp {
-        width: 105px;
+        width: 75px;
         height: 18px;
     }
 
@@ -397,7 +531,7 @@ textarea {
     }
 
     #merrel {
-        width: 40px;
+        width: 20px;
         height: 18px;
     }
 }

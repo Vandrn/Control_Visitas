@@ -1,7 +1,8 @@
 <!-- Sexta Parte: KPIs -->
 <div id="seccion-6" style="display: none;">
-    <label class="subtema" id="kpi">KPI</label>
-
+    <div class="subtema-wrapper">
+        <label class="subtema">KPI</label>
+    </div>
     <div class="kpi-container">
         <div class="kpi-columna izquierda">
             @php
