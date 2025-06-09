@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -95,7 +96,10 @@
             <input type="hidden" name="FECHA_HORA_INICIO" id="fecha_inicio">
         </form>
     </div>
-    @include ('partials.footer')
+    <div style="height: 80px;"></div>
 </body>
+<footer class="footer-banner">
+    <img src="{{ asset('images/banner.png') }}" alt="logos" id="logos" class="logo-banner">
+</footer>
 
 </html>

@@ -287,7 +287,7 @@ class FormularioController extends Controller
         }
     }
 
-    private function uploadImageToCloudStorage($file, $nombreCampo, $prefix = 'observaciones/')
+   /* private function uploadImageToCloudStorage($file, $nombreCampo, $prefix = 'observaciones/')
     {
         try {
             if (!session()->has('token_unico')) {
@@ -349,7 +349,7 @@ class FormularioController extends Controller
             Log::error('Cloud Storage Upload Error: ' . $e->getMessage());
             return null;
         }
-    }
+    }*/
 
     /**
      * 🆕 SUBIDA OPTIMIZADA SIN INTERVENTION IMAGE (solo PHP nativo)

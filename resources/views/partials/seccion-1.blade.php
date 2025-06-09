@@ -5,7 +5,6 @@
         <br>
         <br>
         <select id="pais" name="pais" class="form-select seleccion" required>
-            <option value="">Seleccione un país</option>
         </select>
         <br>
         <br>
