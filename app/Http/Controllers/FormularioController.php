@@ -242,7 +242,7 @@ class FormularioController extends Controller
             }
 
             // 🆕 USAR URLS DE IMÁGENES YA SUBIDAS EN SESIÓN (NO PROCESAR ARCHIVOS)
-            $imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER', 'IMG_OBS_KPI'];
+            $imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER'];
 
             foreach ($imageFields as $fieldName) {
                 // ✅ Obtener URL de la sesión (ya subida incrementalmente)
@@ -255,14 +255,14 @@ class FormularioController extends Controller
             Log::info('📋 Data being inserted into BigQuery (URLs only):', $data);
 
             // Validar variaciones KPI del 1 al 6
-            for ($i = 1; $i <= 6; $i++) {
+            /*for ($i = 1; $i <= 6; $i++) {
                 $campo = 'VAR_06_0' . $i;
                 if (!$request->filled($campo) || !is_numeric($request->input($campo))) {
                     return response()->json([
                         'error' => "Debe ingresar una variación válida para KPI {$i}."
                     ], 422);
                 }
-            }
+            }*/
 
 
             // Insertar en BigQuery

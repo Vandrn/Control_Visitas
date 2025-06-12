@@ -109,7 +109,7 @@ $(document).ready(function () {
     });
 
     // Definir el orden de las vistas
-    let secciones = ["intro", "datos", "seccion-1", "intro-2", "seccion-2", "intro-3", "seccion-3", "intro-4", "seccion-4", "intro-5", "seccion-5", "seccion-6", "seccion-7"];
+    let secciones = ["intro", "datos", "seccion-1", "intro-2", "seccion-2", "intro-3", "seccion-3", "intro-4", "seccion-4", "intro-5", "seccion-5", "seccion-7"];
     let indiceActual = 0;
 
     function mostrarSeccion(indice) {
@@ -438,6 +438,14 @@ $(document).ready(function () {
             "preg_02_12": "PREG_01_12",
             "preg_02_13": "PREG_01_13",
             "preg_02_14": "PREG_01_14",
+            "preg_02_15": "PREG_01_15",
+            "preg_02_16": "PREG_01_16",
+            "preg_02_17": "PREG_01_17",
+            "preg_02_18": "PREG_01_18",
+            "preg_02_19": "PREG_01_19",
+            "preg_02_20": "PREG_01_20",
+            "preg_02_21": "PREG_01_21",
+            "preg_02_22": "PREG_01_22",
             "obs_02_01": "OBS_01_01",
             "preg_03_01": "PREG_02_01",
             "preg_03_02": "PREG_02_02",
@@ -445,8 +453,7 @@ $(document).ready(function () {
             "preg_03_04": "PREG_02_04",
             "preg_03_05": "PREG_02_05",
             "preg_03_06": "PREG_02_06",
-            "preg_03_07": "PREG_02_07",
-            "preg_03_08": "PREG_02_08",
+            "preg_03_07": "PREG_02_08",
             "obs_03_01": "OBS_02_01",
             "preg_04_01": "PREG_03_01",
             "preg_04_02": "PREG_03_02",
@@ -455,21 +462,23 @@ $(document).ready(function () {
             "preg_04_05": "PREG_03_05",
             "preg_04_06": "PREG_03_06",
             "preg_04_07": "PREG_03_07",
+            "preg_04_08": "PREG_03_08",
+            "preg_04_09": "PREG_03_09",
             "obs_04_01": "OBS_03_01",
-            "preg_05_01": "PREG_04_01",
-            "preg_05_02": "PREG_04_02",
-            "preg_05_03": "PREG_04_03",
-            "preg_05_04": "PREG_04_04",
-            "preg_05_05": "PREG_04_05",
-            "preg_05_06": "PREG_04_06",
-            "preg_05_07": "PREG_04_07",
-            "preg_05_08": "PREG_04_08",
-            "preg_05_09": "PREG_04_09",
-            "preg_05_10": "PREG_04_10",
-            "preg_05_11": "PREG_04_11",
-            "preg_05_12": "PREG_04_12",
-            "preg_05_13": "PREG_04_13",
-            "preg_05_14": "PREG_04_14",
+            "preg_05_01": "PREG_04_02",
+            "preg_05_02": "PREG_04_03",
+            "preg_05_03": "PREG_04_05",
+            "preg_05_04": "PREG_04_06",
+            "preg_05_05": "PREG_04_07",
+            "preg_05_06": "PREG_04_08",
+            "preg_05_07": "PREG_04_09",
+            "preg_05_08": "PREG_04_10",
+            "preg_05_09": "PREG_04_11",
+            "preg_05_10": "PREG_04_12",
+            "preg_05_11": "PREG_04_13",
+            "preg_05_12": "PREG_04_14",
+            "preg_05_13": "PREG_04_15",
+            "preg_05_14": "PREG_04_16",
             "obs_05_01": "OBS_04_01",
             "preg_06_01": "PREG_05_01",
             "preg_06_02": "PREG_05_02",
@@ -506,13 +515,13 @@ $(document).ready(function () {
         });
 
         // Agregar variaciones KPI al objeto datos
-        for (let i = 1; i <= 6; i++) {
+        /*for (let i = 1; i <= 6; i++) {
             let nombreCampo = `var_06_0${i}`;
             let valor = $(`input[name="${nombreCampo}"]`).val();
             if (valor !== "" && !isNaN(parseFloat(valor))) {
                 datos[`VAR_06_0${i}`] = parseFloat(valor);
             }
-        }
+        }*/
 
         // Specifically check for plan fields
         $("input[name^='PLAN_'], input[name^='FECHA_PLAN_']").each(function () {
@@ -535,7 +544,7 @@ $(document).ready(function () {
         datos['CRM_ID_TIENDA'] = $("#CRM_ID_TIENDA").val();
 
         // 🆕 AGREGAR SOLO URLs DE IMÁGENES YA SUBIDAS (NO ARCHIVOS)
-        const imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER', 'IMG_OBS_KPI'];
+        const imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER'];
         imageFields.forEach(fieldName => {
             // ✅ SOLO usar URLs ya subidas incrementalmente
             datos[fieldName] = imagenesSubidas[fieldName] || null;
@@ -637,7 +646,7 @@ $(document).ready(function () {
             console.log('🚀 Enviando formulario final con URLs de imágenes...');
 
             // 🆕 VALIDACIÓN MEJORADA: Verificar que las imágenes requeridas estén subidas
-            const imagenesRequeridas = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER', 'IMG_OBS_KPI'];
+            const imagenesRequeridas = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER'];
             const imagenesNoSubidas = [];
 
             imagenesRequeridas.forEach(fieldName => {
@@ -683,7 +692,7 @@ $(document).ready(function () {
         }
 
         // Validar campos de variación de KPI si estamos en sección 6
-        if (indiceActual === secciones.indexOf("seccion-6")) {
+        /*if (indiceActual === secciones.indexOf("seccion-6")) {
             let variacionesValidas = true;
 
             for (let i = 1; i <= 6; i++) {
@@ -703,7 +712,7 @@ $(document).ready(function () {
                 mostrarNotificacion('Por favor, ingrese valores numéricos válidos en todas las variaciones KPI.', 'warning');
                 return;
             }
-        }
+        }*/
 
         mostrarSeccion(++indiceActual);
     });

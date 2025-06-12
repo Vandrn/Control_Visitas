@@ -15,6 +15,14 @@ $secciones = [
 "Área de comida limpia y articulos personales ordenados en su área.",
 "Baño limpio y ordenado",
 "La tienda cuenta con suficientes sillas o bancos en buen estado (limpios y lavados) para que los clientes se prueben los zapatos (según planograma o layout). NOTA: Si los sillones están sucios deben mandarse a lavar.",
+"Las cajas alzadoras de zapatos se usan en las exhibiciones.",
+"No se usa cinta adhesiva (tape) en ningún lugar de la tienda.",
+"No hay muebles dañados, rotos o quebrados en la tienda.",
+"El área de caja está ordenada y conforme a los estándares autorizados y en servicio.",
+"Se ofrecen accesorios a los clientes en cada visita o compra.",
+"Todas las luces de los muebles de pared y mesa son funcionales y emiten una luz amarilla intensa (3500-4000 lúmenes).",
+"Las pantallas de la vitrina están posicionadas a 90 grados (de forma vertical).",
+"Los azulejos, la fórmica y el piso no están dañados en ningún lugar de la tienda.",
 "Observaciones del área de operaciones"
 ]],
 ['seccion' => 3, 'titulo' => 'Administración', 'nombreCampo' => 'administracion', 'preguntas' => [
@@ -24,7 +32,7 @@ $secciones = [
 "Libro de cuadre de efectivo y caja chica al día",
 "Libro de horarios al día y firmados por los empleados",
 "Conteo efectuados según lineamientos establecidos.",
-"Pizarras y folders Friedman actualizados.",
+
 "Files actualizados.",
 "Observaciones del área de administración."
 ]],
@@ -36,13 +44,15 @@ $secciones = [
 "Implementación de planogramas(Producto, POP, Manuales).",
 "En las exhibiciones están todos los estilos disponibles en la tienda representados por talla (sin ningún zapato dañado o sucio).",
 "Todas las sandalias en exhibidores y/o mesas usan modeladores acrílicos.",
+"Todas las sandalias y zapatos abiertos tienen un acrílico.",
+"Todas las carteras tienen un alzador en las exhibiciones.",
 "Observaciones del área Producto."
 ]],
 ['seccion' => 5, 'titulo' => 'Personal', 'nombreCampo' => 'personal', 'preguntas' => [
-"Cumplimiento de las marcaciones (4 por día).",
+
 "Personal con imagen presentable, con su respectivo uniforme según política.",
 "Amabilidad en el recibimiento de los clientes.",
-"Cumplimiento de protocolos de bioseguridad.",
+
 "Disponibilidad del personal para ayudar durante el recorrido, selección y prueba de calzado.",
 "Nuestros ADOCKERS ofrecen ayuda a todos los clientes.",
 "Nuestros ADOCKERS ofrecen encontrar la talla que el cliente pide y si no hay talla, ofrecen alternativas.",
