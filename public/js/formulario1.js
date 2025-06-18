@@ -140,7 +140,7 @@ $(document).ready(function () {
      * Configurar subida incremental automática con compresión
      */
     function setupSubidaIncremental() {
-        const imageInputs = $('input[name^="IMG_OBS_"]');
+        const imageInputs = $('input[name^="IMG_"]');
 
         imageInputs.each(function () {
             const $input = $(this);
@@ -544,9 +544,14 @@ $(document).ready(function () {
         datos['CRM_ID_TIENDA'] = $("#CRM_ID_TIENDA").val();
 
         // 🆕 AGREGAR SOLO URLs DE IMÁGENES YA SUBIDAS (NO ARCHIVOS)
-        const imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER'];
+        /*const imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER'];
         imageFields.forEach(fieldName => {
             // ✅ SOLO usar URLs ya subidas incrementalmente
+            datos[fieldName] = imagenesSubidas[fieldName] || null;
+            console.log(`📎 ${fieldName}: ${datos[fieldName] || 'No subida'}`);
+        });*/
+        // 🆕 AGREGAR TODAS LAS URLs DE IMÁGENES YA SUBIDAS
+        Object.keys(imagenesSubidas).forEach((fieldName) => {
             datos[fieldName] = imagenesSubidas[fieldName] || null;
             console.log(`📎 ${fieldName}: ${datos[fieldName] || 'No subida'}`);
         });

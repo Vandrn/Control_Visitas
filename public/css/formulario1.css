@@ -269,6 +269,27 @@ body {
     border-color: #e6b200;
 }
 
+.input-imagen {
+    width: 100%;
+    text-align: center;
+    margin-top: 10px;
+    margin-bottom: 25px;
+}
+
+.input-imagen label {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #333;
+}
+
+.input-imagen input[type="file"] {
+    margin: 0 auto;
+    display: block;
+    font-size: 14px;
+}
+
 .date-container label {
     display: flex;
     flex-wrap: wrap;

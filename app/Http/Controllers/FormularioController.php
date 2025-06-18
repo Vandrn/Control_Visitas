@@ -243,13 +243,17 @@ class FormularioController extends Controller
 
             // 🆕 USAR URLS DE IMÁGENES YA SUBIDAS EN SESIÓN (NO PROCESAR ARCHIVOS)
             $imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER'];
-
             foreach ($imageFields as $fieldName) {
-                // ✅ Obtener URL de la sesión (ya subida incrementalmente)
                 $uploadedUrl = session("uploaded_images.{$fieldName}");
                 $data[$fieldName] = $uploadedUrl ?? null;
-
-                Log::info("📎 Asignando URL para {$fieldName}: " . ($uploadedUrl ?? 'null'));
+                Log::info("📎 Imagen OBS: {$fieldName}: " . ($uploadedUrl ?? 'null'));
+            }
+            // 🟢 Campos nuevos individuales: IMG_02_01, IMG_02_02, etc.
+            foreach ($request->all() as $key => $value) {
+                if (preg_match('/^IMG_\d{2}_\d{2}$/', $key)) {
+                    $data[$key] = $value;
+                    Log::info("✅ Imagen pregunta: {$key} => {$value}");
+                }
             }
 
             Log::info('📋 Data being inserted into BigQuery (URLs only):', $data);
@@ -287,7 +291,7 @@ class FormularioController extends Controller
         }
     }
 
-   /* private function uploadImageToCloudStorage($file, $nombreCampo, $prefix = 'observaciones/')
+    /* private function uploadImageToCloudStorage($file, $nombreCampo, $prefix = 'observaciones/')
     {
         try {
             if (!session()->has('token_unico')) {

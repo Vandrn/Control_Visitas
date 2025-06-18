@@ -32,7 +32,6 @@ $secciones = [
 "Libro de cuadre de efectivo y caja chica al día",
 "Libro de horarios al día y firmados por los empleados",
 "Conteo efectuados según lineamientos establecidos.",
-
 "Files actualizados.",
 "Observaciones del área de administración."
 ]],
@@ -49,10 +48,8 @@ $secciones = [
 "Observaciones del área Producto."
 ]],
 ['seccion' => 5, 'titulo' => 'Personal', 'nombreCampo' => 'personal', 'preguntas' => [
-
 "Personal con imagen presentable, con su respectivo uniforme según política.",
 "Amabilidad en el recibimiento de los clientes.",
-
 "Disponibilidad del personal para ayudar durante el recorrido, selección y prueba de calzado.",
 "Nuestros ADOCKERS ofrecen ayuda a todos los clientes.",
 "Nuestros ADOCKERS ofrecen encontrar la talla que el cliente pide y si no hay talla, ofrecen alternativas.",
