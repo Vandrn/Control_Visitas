@@ -5,7 +5,12 @@
 
     <br><br><br>
     @php
-    $preguntasConImagen = [1, 2, 3, 4, 6, 7, 14]; // ← Preguntas que llevarán input de imagen
+    // 🔵 Preguntas con imagen por sección según marcadas en azul
+    $preguntasConImagen = [
+        2 => [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22], // Operaciones
+        4 => [1, 2, 5, 6, 7, 8, 9], // Producto
+        5 => [1, 9] // Personal
+    ];
     @endphp
 
     @foreach ($preguntas as $index => $pregunta)
@@ -49,7 +54,7 @@
             @endfor
     </div>
 
-    @if ($seccion == 2 && in_array($index + 1, $preguntasConImagen))
+    @if (isset($preguntasConImagen[$seccion]) && in_array($index + 1, $preguntasConImagen[$seccion]))
     <!-- Campo de imagen específico para esta pregunta -->
     <div class="input-imagen">
         <label for="{{ $nombreImagenIndividual }}">Subir imagen (opcional)</label>

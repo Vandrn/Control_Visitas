@@ -75,6 +75,12 @@ $secciones = [
 
 <!-- Preguntas de la Sección -->
 <div id="preguntas-{{ $seccion['seccion'] }}" style="display: none;">
-    @include('partials.preguntas', $seccion)
+    @include('partials.preguntas', [
+        'seccion' => $seccion['seccion'],
+        'titulo' => $seccion['titulo'],
+        'preguntas' => $seccion['preguntas'],
+        'nombreCampo' => $seccion['nombreCampo'],
+        'resultado' => $resultado ?? null // para que no falle si no está seteado
+    ])
 </div>
 @endforeach

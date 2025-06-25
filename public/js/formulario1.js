@@ -515,13 +515,13 @@ $(document).ready(function () {
         });
 
         // Agregar variaciones KPI al objeto datos
-        /*for (let i = 1; i <= 6; i++) {
+        for (let i = 1; i <= 6; i++) {
             let nombreCampo = `var_06_0${i}`;
             let valor = $(`input[name="${nombreCampo}"]`).val();
             if (valor !== "" && !isNaN(parseFloat(valor))) {
                 datos[`VAR_06_0${i}`] = parseFloat(valor);
             }
-        }*/
+        }
 
         // Specifically check for plan fields
         $("input[name^='PLAN_'], input[name^='FECHA_PLAN_']").each(function () {
@@ -697,7 +697,7 @@ $(document).ready(function () {
         }
 
         // Validar campos de variación de KPI si estamos en sección 6
-        /*if (indiceActual === secciones.indexOf("seccion-6")) {
+        if (indiceActual === secciones.indexOf("seccion-6")) {
             let variacionesValidas = true;
 
             for (let i = 1; i <= 6; i++) {
@@ -717,7 +717,7 @@ $(document).ready(function () {
                 mostrarNotificacion('Por favor, ingrese valores numéricos válidos en todas las variaciones KPI.', 'warning');
                 return;
             }
-        }*/
+        }
 
         mostrarSeccion(++indiceActual);
     });

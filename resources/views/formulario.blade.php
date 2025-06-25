@@ -89,6 +89,7 @@
             @include('partials.datos')
             @include ('partials.seccion-1')
             @include ('partials.largas')
+            @include('partials.kpis')
             @include('partials.seccion-7')
             @include('partials.final')
             <input type="hidden" id="ubicacion" name="ubicacion">
