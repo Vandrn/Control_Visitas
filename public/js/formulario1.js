@@ -144,7 +144,8 @@ $(document).ready(function () {
 
         imageInputs.each(function () {
             const $input = $(this);
-            const fieldName = $input.attr('name');
+            const rawName = $input.attr('name');
+            const fieldName = rawName.replace(/\[\]$/, ''); // ✅ Elimina corchetes [] si hay
 
             $input.off('change.incremental').on('change.incremental', async function (e) {
                 const files = Array.from(e.target.files);
@@ -155,19 +156,34 @@ $(document).ready(function () {
                     return;
                 }
 
-                const file = files[0];
+                // 👇 asegúrate de re-declararlo aquí también por seguridad
+                const rawName = $input.attr('name');
+                const fieldName = rawName.replace(/\[\]$/, '');
 
-                // Verificar que es una imagen
-                if (!file.type.startsWith('image/')) {
-                    mostrarNotificacion('❌ Solo se permiten archivos de imagen', 'error');
-                    $input.val(''); // Limpiar input
+                if (fieldName.startsWith('IMG_OBS_')) {
+                    const file = files[0];
+                    await comprimirYSubirImagen(file, fieldName, $input);
                     return;
                 }
 
-                console.log(`🚀 Iniciando compresión y subida: ${fieldName}`);
-                console.log(`📏 Tamaño original: ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+                for (let i = 0; i < files.length && i < 5; i++) {
+                    const file = files[i];
 
-                await comprimirYSubirImagen(file, fieldName, $input);
+                    if (!file.type.startsWith('image/')) {
+                        mostrarNotificacion(`❌ El archivo ${file.name} no es una imagen`, 'error');
+                        continue;
+                    }
+
+                    if (!imagenesSubidas[fieldName]) {
+                        imagenesSubidas[fieldName] = [];
+                    }
+
+                    const index = imagenesSubidas[fieldName].length;
+                    const indexedFieldName = `${fieldName}_${String(index + 1).padStart(2, '0')}`;
+
+                    await comprimirYSubirImagen(file, indexedFieldName, $input);
+                    imagenesSubidas[fieldName].push(indexedFieldName);
+                }
             });
         });
     }
@@ -305,7 +321,11 @@ $(document).ready(function () {
 
             if (response.ok && result.success) {
                 // Guardar URL en memoria local
-                imagenesSubidas[fieldName] = result.url;
+                if (!imagenesSubidas[fieldName]) {
+                    imagenesSubidas[fieldName] = [];
+                }
+                imagenesSubidas[fieldName].push(result.url);
+
 
                 console.log(`✅ Imagen subida: ${fieldName} -> ${result.url}`);
                 mostrarNotificacion(`✅ ${fieldName} subida correctamente`, 'success');

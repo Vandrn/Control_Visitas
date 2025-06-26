@@ -8,6 +8,7 @@ use Google\Cloud\Storage\StorageClient;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\Facades\Image;
+use Illuminate\Support\Str;
 
 class FormularioController extends Controller
 {
@@ -40,7 +41,7 @@ class FormularioController extends Controller
         session(['form_id' => $formId]);
 
         // Fetch data from BigQuery
-        $query = 'SELECT * FROM `adoc-bi-dev.OPB.gerente_retail` WHERE session_id = @session_id';
+        $query = 'SELECT * FROM `adoc-bi-dev.OPB.GR_nuevo` WHERE session_id = @session_id';
         $queryJobConfig = $this->bigQuery->query($query)->parameters(['session_id' => $formId]);
         $resultados = $this->bigQuery->runQuery($queryJobConfig);
 
@@ -141,7 +142,7 @@ class FormularioController extends Controller
             }
 
             if (!session()->has('token_unico')) {
-                session(['token_unico' => \Illuminate\Support\Str::uuid()->toString()]);
+                session(['token_unico' => Str::uuid()->toString()]);
             }
 
             Log::info("📤 Subiendo imagen individual", [
@@ -189,7 +190,7 @@ class FormularioController extends Controller
     {
         try {
             if (!session()->has('token_unico')) {
-                session(['token_unico' => \Illuminate\Support\Str::uuid()->toString()]);
+                session(['token_unico' => Str::uuid()->toString()]);
             }
             $formId = session('token_unico');
 
@@ -197,68 +198,91 @@ class FormularioController extends Controller
             $data = [
                 'id' => uniqid(),
                 'session_id' => $formId,
-                'FECHA_HORA_INICIO' => $request->input('FECHA_HORA_INICIO'),
-                'FECHA_HORA_FIN' => now(),
-                'CORREO_REALIZO' => $request->correo_tienda ?? null,
-                'LIDER_ZONA' => $request->jefe_zona ?? null,
-                'PAIS' => $request->pais ?? null,
-                'ZONA' => $request->zona ?? null,
-                'TIENDA' => $request->tienda ?? null,
-                'UBICACION' => $request->ubicacion ?? null,
+                'fecha_hora_inicio' => $request->input('FECHA_HORA_INICIO'),
+                'fecha_hora_fin' => now(),
+                'correo_realizo' => $request->correo_tienda ?? null,
+                'lider_zona' => $request->jefe_zona ?? null,
+                'tienda' => $request->tienda ?? null,
+                'ubicacion' => $request->ubicacion ?? null,
             ];
 
-            $planesValidos = 0;
+            // Agrupar preguntas e imágenes por sección y código de pregunta
+            $secciones = [];
+            $agrupadas = [];
+
+            // 1️⃣ Primero: agrupar respuestas
+            foreach ($request->all() as $key => $valor) {
+                if (Str::startsWith($key, 'PREG_')) {
+                    [$_, $sec, $preg] = explode('_', $key);
+                    $cod = "PREG_{$sec}_{$preg}";
+                    $nombreSeccion = "SECCION_$sec";
+
+                    $agrupadas[$nombreSeccion][$cod]['codigo_pregunta'] = $cod;
+                    $agrupadas[$nombreSeccion][$cod]['respuesta'] = $valor;
+                }
+            }
+
+            // 2️⃣ Luego: agrupar imágenes (solo si ya hay respuesta)
+            foreach ($request->all() as $key => $valor) {
+                if (Str::startsWith($key, 'IMG_')) {
+                    $partes = explode('_', $key);
+                    if (count($partes) >= 4) {
+                        [$_, $sec, $preg, $imgIdx] = $partes;
+                        $cod = "PREG_{$sec}_{$preg}";
+                        $nombreSeccion = "SECCION_$sec";
+
+                        if (isset($agrupadas[$nombreSeccion][$cod])) {
+                            $agrupadas[$nombreSeccion][$cod]['imagenes'][] = $valor;
+                        } else {
+                            Log::warning('📸 Imagen ignorada porque la pregunta no tiene respuesta (aún)', [
+                                'campo' => $key,
+                                'valor' => $valor
+                            ]);
+                        }
+                    }
+                }
+            }
+
+            // Construir estructura final de secciones
+            foreach ($agrupadas as $nombre => $preguntas) {
+                $preguntasFormateadas = [];
+
+                foreach ($preguntas as $pregunta) {
+                    if (!isset($pregunta['codigo_pregunta'])) {
+                        Log::warning('❗ Pregunta sin código detectada, se ignora', ['pregunta' => $pregunta]);
+                        continue;
+                    }
+
+                    $preguntasFormateadas[] = [
+                        'codigo_pregunta' => $pregunta['codigo_pregunta'],
+                        'respuesta' => $pregunta['respuesta'] ?? '',
+                        'imagenes' => array_slice($pregunta['imagenes'] ?? [], 0, 5),
+                    ];
+                }
+
+                $secciones[] = [
+                    'nombre_seccion' => $nombre,
+                    'preguntas' => $preguntasFormateadas
+                ];
+            }
+
+            $data['secciones'] = $secciones;
+
+            // Procesar planes
+            $planes = [];
             for ($i = 1; $i <= 2; $i++) {
-                $plan = $request->input("PLAN_0$i");
+                $descripcion = $request->input("PLAN_0$i");
                 $fecha = $request->input("FECHA_PLAN_0$i");
-                if (!empty($plan) && !empty($fecha)) {
-                    $planesValidos++;
+                if ($descripcion && $fecha) {
+                    $planes[] = [
+                        'descripcion' => $descripcion,
+                        'fecha_cumplimiento' => $fecha,
+                    ];
                 }
             }
+            $data['planes'] = $planes;
 
-            if ($planesValidos < 1) {
-                return response()->json([
-                    'error' => 'Debe completar al menos un Plan de Acción con su fecha.'
-                ], 422);
-            }
-
-            // Recolectar campos del formulario
-            foreach ($request->all() as $key => $value) {
-                if (
-                    strpos($key, 'PREG_') !== false ||
-                    strpos($key, 'OBS_') !== false ||
-                    strpos($key, 'PLAN_') !== false
-                ) {
-                    $data[$key] = $value;
-                }
-
-                if (strpos($key, 'VAR_06_') !== false) {
-                    $data[$key] = is_numeric($value) ? floatval($value) : null;
-                }
-
-                if (strpos($key, 'FECHA_PLAN_') !== false) {
-                    $data[$key] = (!empty($value) && strtotime($value)) ? $value : null;
-                }
-            }
-
-            // 🆕 USAR URLS DE IMÁGENES YA SUBIDAS EN SESIÓN (NO PROCESAR ARCHIVOS)
-            $imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER'];
-            foreach ($imageFields as $fieldName) {
-                $uploadedUrl = session("uploaded_images.{$fieldName}");
-                $data[$fieldName] = $uploadedUrl ?? null;
-                Log::info("📎 Imagen OBS: {$fieldName}: " . ($uploadedUrl ?? 'null'));
-            }
-            // 🟢 Campos nuevos individuales: IMG_02_01, IMG_02_02, etc.
-            foreach ($request->all() as $key => $value) {
-                if (preg_match('/^IMG_\d{2}_\d{2}$/', $key)) {
-                    $data[$key] = $value;
-                    Log::info("✅ Imagen pregunta: {$key} => {$value}");
-                }
-            }
-
-            Log::info('📋 Data being inserted into BigQuery (URLs only):', $data);
-
-            // Validar variaciones KPI del 1 al 6
+            // Validar KPI
             for ($i = 1; $i <= 6; $i++) {
                 $campo = 'VAR_06_0' . $i;
                 if (!$request->filled($campo) || !is_numeric($request->input($campo))) {
@@ -268,26 +292,36 @@ class FormularioController extends Controller
                 }
             }
 
+            Log::info('📥 Datos recibidos en guardarSeccion:', $request->all());
+            Log::info('📦 Estructura final enviada a BigQuery:', $data);
 
             // Insertar en BigQuery
-            $table = $this->bigQuery->dataset(env('BIGQUERY_DATASET'))->table(env('BIGQUERY_TABLE'));
+            $table = $this->bigQuery->dataset('OPB')->table('gerente_retail');
             $insertResponse = $table->insertRows([['data' => $data]]);
 
             if ($insertResponse->isSuccessful()) {
-                // 🧹 Limpiar sesión de imágenes después del guardado exitoso
-                session()->forget('uploaded_images');
-
-                return response()->json(['message' => 'Formulario guardado correctamente.']);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Sección guardada correctamente en BigQuery.'
+                ]);
             } else {
-                Log::error('Error al insertar datos en BigQuery:', ['errors' => $insertResponse->failedRows()]);
-                return response()->json(['error' => 'Error al insertar datos en BigQuery.'], 500);
+                Log::error('❌ Error al insertar en BigQuery', [
+                    'errores' => $insertResponse->failedRows()
+                ]);
+
+                return response()->json([
+                    'error' => 'Error al insertar en BigQuery.',
+                    'detalles' => $insertResponse->failedRows()
+                ], 500);
             }
         } catch (\Exception $e) {
-            Log::error('Error al guardar la sección:', [
+            Log::error('Error en guardarSeccion', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            return response()->json(['error' => 'Error interno en el servidor: ' . $e->getMessage()], 500);
+            return response()->json([
+                'error' => 'Error interno: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -362,7 +396,7 @@ class FormularioController extends Controller
     {
         try {
             if (!session()->has('token_unico')) {
-                session(['token_unico' => \Illuminate\Support\Str::uuid()->toString()]);
+                session(['token_unico' => Str::uuid()->toString()]);
             }
             $tokenUnico = session('token_unico');
 

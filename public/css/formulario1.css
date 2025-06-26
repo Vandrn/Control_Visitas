@@ -288,6 +288,7 @@ body {
     margin: 0 auto;
     display: block;
     font-size: 14px;
+    width: 240px; /* 👈 Esto lo hace más consistente */
 }
 
 .date-container label {

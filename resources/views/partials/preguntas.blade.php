@@ -55,11 +55,18 @@
     </div>
 
     @if (isset($preguntasConImagen[$seccion]) && in_array($index + 1, $preguntasConImagen[$seccion]))
-    <!-- Campo de imagen específico para esta pregunta -->
-    <div class="input-imagen">
-        <label for="{{ $nombreImagenIndividual }}">Subir imagen (opcional)</label>
-        <input type="file" name="{{ $nombreImagenIndividual }}" accept="image/*">
-    </div>
+        <div class="input-imagen">
+            <label for="{{ $nombreImagenIndividual }}" class="form-label">
+                Subir hasta 5 imágenes (opcional)
+            </label>
+            <input 
+                type="file" 
+                name="{{ $nombreImagenIndividual }}[]" 
+                id="{{ $nombreImagenIndividual }}" 
+                multiple 
+                accept="image/*"
+            >
+        </div>
     @endif
     @endif
     <br>
