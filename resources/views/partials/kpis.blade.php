@@ -52,9 +52,6 @@
         <label id="observacion" class="pregunta">7. Observaciones del área KPIs</label>
         <br>
         <textarea class="texto" placeholder="Escriba sus observaciones aquí..." rows="4" cols="50" name="obs_06_01" required></textarea>
-        <div class="file_container">
-            <input type="file" id="IMG_OBS_KPI" name="IMG_OBS_KPI" class="form-control-file" accept="image/png, image/jpeg" required>
-        </div>
     </div>
 
     <button type="button" class="boton btnSiguiente">Continuar</button>

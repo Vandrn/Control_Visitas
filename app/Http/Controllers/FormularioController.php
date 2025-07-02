@@ -194,128 +194,67 @@ class FormularioController extends Controller
             }
             $formId = session('token_unico');
 
-            // Datos base
+            // === DATOS BASE (orden según esquema) ===
             $data = [
                 'id' => uniqid(),
                 'session_id' => $formId,
-                'fecha_hora_inicio' => $request->input('FECHA_HORA_INICIO'),
+                'fecha_hora_inicio' => $request->input('fecha_hora_inicio'),
                 'fecha_hora_fin' => now(),
-                'correo_realizo' => $request->correo_tienda ?? null,
-                'lider_zona' => $request->jefe_zona ?? null,
-                'tienda' => $request->tienda ?? null,
-                'ubicacion' => $request->ubicacion ?? null,
+                'correo_realizo' => $request->input('correo_realizo'),
+                'lider_zona' => $request->input('lider_zona'),
+                'tienda' => $request->input('tienda'),
+                'ubicacion' => $request->input('ubicacion'),
+                'pais' => $request->input('pais'),
+                'zona' => $request->input('zona'),
             ];
 
-            // Agrupar preguntas e imágenes por sección y código de pregunta
-            $secciones = [];
-            $agrupadas = [];
+            // === SECCIONES ===
+            $data['secciones'] = $request->input('secciones', []);
 
-            // 1️⃣ Primero: agrupar respuestas
-            foreach ($request->all() as $key => $valor) {
-                if (Str::startsWith($key, 'PREG_')) {
-                    [$_, $sec, $preg] = explode('_', $key);
-                    $cod = "PREG_{$sec}_{$preg}";
-                    $nombreSeccion = "SECCION_$sec";
+            // === PLANES DE ACCIÓN ===
+            $data['planes'] = $request->input('planes', []);
 
-                    $agrupadas[$nombreSeccion][$cod]['codigo_pregunta'] = $cod;
-                    $agrupadas[$nombreSeccion][$cod]['respuesta'] = $valor;
-                }
-            }
+            // === KPIs (si vienen como array ya formateado) ===
+            $data['kpis'] = $request->input('kpis', []);
 
-            // 2️⃣ Luego: agrupar imágenes (solo si ya hay respuesta)
-            foreach ($request->all() as $key => $valor) {
-                if (Str::startsWith($key, 'IMG_')) {
-                    $partes = explode('_', $key);
-                    if (count($partes) >= 4) {
-                        [$_, $sec, $preg, $imgIdx] = $partes;
-                        $cod = "PREG_{$sec}_{$preg}";
-                        $nombreSeccion = "SECCION_$sec";
-
-                        if (isset($agrupadas[$nombreSeccion][$cod])) {
-                            $agrupadas[$nombreSeccion][$cod]['imagenes'][] = $valor;
-                        } else {
-                            Log::warning('📸 Imagen ignorada porque la pregunta no tiene respuesta (aún)', [
-                                'campo' => $key,
-                                'valor' => $valor
-                            ]);
-                        }
-                    }
-                }
-            }
-
-            // Construir estructura final de secciones
-            foreach ($agrupadas as $nombre => $preguntas) {
-                $preguntasFormateadas = [];
-
-                foreach ($preguntas as $pregunta) {
-                    if (!isset($pregunta['codigo_pregunta'])) {
-                        Log::warning('❗ Pregunta sin código detectada, se ignora', ['pregunta' => $pregunta]);
-                        continue;
+            // === VERIFICACIÓN DE URL DE IMÁGENES (opcional) ===
+            foreach ($data['secciones'] as &$seccion) {
+                foreach ($seccion['preguntas'] as &$pregunta) {
+                    // Asegurarse que sea arreglo, aunque venga vacío
+                    if (!isset($pregunta['imagenes']) || !is_array($pregunta['imagenes'])) {
+                        $pregunta['imagenes'] = [];
                     }
 
-                    $preguntasFormateadas[] = [
-                        'codigo_pregunta' => $pregunta['codigo_pregunta'],
-                        'respuesta' => $pregunta['respuesta'] ?? '',
-                        'imagenes' => array_slice($pregunta['imagenes'] ?? [], 0, 5),
-                    ];
-                }
-
-                $secciones[] = [
-                    'nombre_seccion' => $nombre,
-                    'preguntas' => $preguntasFormateadas
-                ];
-            }
-
-            $data['secciones'] = $secciones;
-
-            // Procesar planes
-            $planes = [];
-            for ($i = 1; $i <= 2; $i++) {
-                $descripcion = $request->input("PLAN_0$i");
-                $fecha = $request->input("FECHA_PLAN_0$i");
-                if ($descripcion && $fecha) {
-                    $planes[] = [
-                        'descripcion' => $descripcion,
-                        'fecha_cumplimiento' => $fecha,
-                    ];
-                }
-            }
-            $data['planes'] = $planes;
-
-            // Validar KPI
-            for ($i = 1; $i <= 6; $i++) {
-                $campo = 'VAR_06_0' . $i;
-                if (!$request->filled($campo) || !is_numeric($request->input($campo))) {
-                    return response()->json([
-                        'error' => "Debe ingresar una variación válida para KPI {$i}."
-                    ], 422);
+                    // Filtrar y asegurar máximo 5 URLs válidas
+                    $pregunta['imagenes'] = collect($pregunta['imagenes'])
+                        ->filter(fn($url) => is_string($url) && str_starts_with($url, 'http'))
+                        ->take(5)
+                        ->values()
+                        ->all();
                 }
             }
 
-            Log::info('📥 Datos recibidos en guardarSeccion:', $request->all());
-            Log::info('📦 Estructura final enviada a BigQuery:', $data);
+            // === LOG ===
+            Log::info("✅ Estructura final lista para insertar:", $data);
 
-            // Insertar en BigQuery
-            $table = $this->bigQuery->dataset('OPB')->table('gerente_retail');
+            // === INSERTAR EN BIGQUERY ===
+            $table = $this->bigQuery
+                ->dataset(env('BIGQUERY_DATASET'))
+                ->table(env('BIGQUERY_TABLE'));
+
             $insertResponse = $table->insertRows([['data' => $data]]);
 
             if ($insertResponse->isSuccessful()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Sección guardada correctamente en BigQuery.'
-                ]);
+                session()->forget('uploaded_images'); // limpiar sesión de imágenes
+                return response()->json(['success' => true, 'message' => 'Formulario guardado correctamente']);
             } else {
                 Log::error('❌ Error al insertar en BigQuery', [
                     'errores' => $insertResponse->failedRows()
                 ]);
-
-                return response()->json([
-                    'error' => 'Error al insertar en BigQuery.',
-                    'detalles' => $insertResponse->failedRows()
-                ], 500);
+                return response()->json(['error' => 'Error al insertar en BigQuery.'], 500);
             }
         } catch (\Exception $e) {
-            Log::error('Error en guardarSeccion', [
+            Log::error('❌ Error interno al guardar sección', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -324,70 +263,6 @@ class FormularioController extends Controller
             ], 500);
         }
     }
-
-    /* private function uploadImageToCloudStorage($file, $nombreCampo, $prefix = 'observaciones/')
-    {
-        try {
-            if (!session()->has('token_unico')) {
-                session(['token_unico' => \Illuminate\Support\Str::uuid()->toString()]);
-            }
-            $tokenUnico = session('token_unico');
-
-            // Crear y comprimir imagen AGRESIVAMENTE
-            $image = Image::make($file);
-
-            // Compresión ULTRA-AGRESIVA para evitar límites
-            $maxWidth = 400;   // Reducido drásticamente
-            $maxHeight = 400;  // Reducido drásticamente
-
-            $image->resize($maxWidth, $maxHeight, function ($constraint) {
-                $constraint->aspectRatio();
-                $constraint->upsize();
-            });
-
-            // Compresión extrema
-            $image->encode('jpg', 15); // Calidad muy baja
-
-            // Verificar tamaño y comprimir más si es necesario
-            $imageSize = strlen($image->stream()->__toString());
-            if ($imageSize > 100000) { // Si es mayor a 100KB
-                $image->resize(300, 300, function ($constraint) {
-                    $constraint->aspectRatio();
-                    $constraint->upsize();
-                });
-                $image->encode('jpg', 10); // Comprimir al extremo
-            }
-
-            $filename = sprintf(
-                '%s%s_%s_%s.jpg',
-                $prefix,
-                $nombreCampo,
-                $tokenUnico,
-                time() // Timestamp para evitar duplicados
-            );
-
-            // Subir imagen ultra-comprimida
-            $this->bucket->upload($image->stream()->__toString(), [
-                'name' => $filename,
-                'metadata' => [
-                    'contentType' => 'image/jpeg',
-                    'cacheControl' => 'public, max-age=3600'
-                ]
-            ]);
-
-            $publicUrl = sprintf(
-                'https://storage.cloud.google.com/%s/%s',
-                config('services.google.storage_bucket'),
-                $filename
-            );
-
-            Log::info("Imagen subida exitosamente: {$filename} -> {$publicUrl}");
-            return $publicUrl;
-        } catch (\Exception $e) {
-            Log::error('Cloud Storage Upload Error: ' . $e->getMessage());
-            return null;
-        }
-    }*/
 
     /**
      * 🆕 SUBIDA OPTIMIZADA SIN INTERVENTION IMAGE (solo PHP nativo)

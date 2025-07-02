@@ -7,9 +7,9 @@
     @php
     // 🔵 Preguntas con imagen por sección según marcadas en azul
     $preguntasConImagen = [
-        2 => [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22], // Operaciones
-        4 => [1, 2, 5, 6, 7, 8, 9], // Producto
-        5 => [1, 9] // Personal
+    2 => [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22], // Operaciones
+    4 => [1, 2, 5, 6, 7, 8, 9], // Producto
+    5 => [1, 9] // Personal
     ];
     @endphp
 
@@ -31,7 +31,7 @@
         <textarea class="texto" id="{{ $idPregunta }}" name="{{ $nombreObservacion }}" placeholder="Escriba sus observaciones aquí..." rows="4" cols="50" required></textarea>
         <br>
         <div class="file_container">
-            <input type="file" id="imagen_{{ $idPregunta }}" name="{{ $nombreImagen }}" class="form-control-file" accept="image/png, image/jpeg" required>
+            <input type="file" id="imagen_{{ $idPregunta }}" name="{{ $nombreImagen }}[]" class="form-control-file" accept="image/png, image/jpeg" multiple>
             <br>
         </div>
     </div>
@@ -59,11 +59,11 @@
             <label for="{{ $nombreImagenIndividual }}" class="form-label">
                 Subir hasta 5 imágenes (opcional)
             </label>
-            <input 
-                type="file" 
-                name="{{ $nombreImagenIndividual }}[]" 
-                id="{{ $nombreImagenIndividual }}" 
-                multiple 
+            <input
+                type="file"
+                name="{{ $nombreImagenIndividual }}[]"
+                id="{{ $nombreImagenIndividual }}"
+                multiple
                 accept="image/*"
             >
         </div>

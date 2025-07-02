@@ -109,7 +109,7 @@ $(document).ready(function () {
     });
 
     // Definir el orden de las vistas
-    let secciones = ["intro", "datos", "seccion-1", "intro-2", "seccion-2", "intro-3", "seccion-3", "intro-4", "seccion-4", "intro-5", "seccion-5", "seccion-7"];
+    let secciones = ["intro", "datos", "seccion-1", "intro-2", "seccion-2", "intro-3", "seccion-3", "intro-4", "seccion-4", "intro-5", "seccion-5", "seccion-6", "seccion-7"];
     let indiceActual = 0;
 
     function mostrarSeccion(indice) {
@@ -161,8 +161,25 @@ $(document).ready(function () {
                 const fieldName = rawName.replace(/\[\]$/, '');
 
                 if (fieldName.startsWith('IMG_OBS_')) {
-                    const file = files[0];
-                    await comprimirYSubirImagen(file, fieldName, $input);
+                    for (let i = 0; i < files.length && i < 5; i++) {
+                        const file = files[i];
+
+                        if (!file.type.startsWith('image/')) {
+                            mostrarNotificacion(`❌ El archivo ${file.name} no es una imagen`, 'error');
+                            continue;
+                        }
+
+                        if (!imagenesSubidas[fieldName]) {
+                            imagenesSubidas[fieldName] = [];
+                        }
+
+                        const index = imagenesSubidas[fieldName].length;
+                        const indexedFieldName = `${fieldName}_${String(index + 1).padStart(2, '0')}`;
+
+                        const url = await comprimirYSubirImagen(file, indexedFieldName, $input);
+                        imagenesSubidas[fieldName].push(url);
+                    }
+
                     return;
                 }
 
@@ -181,8 +198,8 @@ $(document).ready(function () {
                     const index = imagenesSubidas[fieldName].length;
                     const indexedFieldName = `${fieldName}_${String(index + 1).padStart(2, '0')}`;
 
-                    await comprimirYSubirImagen(file, indexedFieldName, $input);
-                    imagenesSubidas[fieldName].push(indexedFieldName);
+                    const url = await comprimirYSubirImagen(file, indexedFieldName, $input);
+                    imagenesSubidas[fieldName].push(url);
                 }
             });
         });
@@ -213,7 +230,8 @@ $(document).ready(function () {
 
             // 3. SUBIR AL SERVIDOR
             mostrarIndicadorSubida($input, true, fieldName, 'Subiendo...');
-            await subirImagenComprimida(imagenComprimida, fieldName, $input);
+            const url = await subirImagenComprimida(imagenComprimida, fieldName, $input);
+            return url;
 
         } catch (error) {
             console.error('Error en compresión/subida:', error);
@@ -320,28 +338,22 @@ $(document).ready(function () {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                // Guardar URL en memoria local
-                if (!imagenesSubidas[fieldName]) {
-                    imagenesSubidas[fieldName] = [];
-                }
-                imagenesSubidas[fieldName].push(result.url);
-
-
                 console.log(`✅ Imagen subida: ${fieldName} -> ${result.url}`);
                 mostrarNotificacion(`✅ ${fieldName} subida correctamente`, 'success');
 
                 // Mostrar preview
                 mostrarPreviewImagen($input, result.url, fieldName);
 
+                return result.url;
             } else {
                 throw new Error(result.error || 'Error desconocido');
             }
-
         } catch (error) {
             console.error('Error en subida:', error);
             throw error;
         }
     }
+
 
     /**
      * Mostrar indicador de subida mejorado
@@ -438,12 +450,14 @@ $(document).ready(function () {
         }
     }
 
-    // Recopilar respuestas antes de guardar
-    function obtenerRespuestas() {
-        transformarValoresRadio();
-        let datos = {};
+    function obtenerEstructuraFinal() {
+        transformarValoresRadio(); // Asegúrate de tener los valores transformados
 
-        let mapaCampos = {
+        const seccionesMap = {};
+        const kpis = [];
+        const planes = [];
+        const imagenes = imagenesSubidas || {};
+        const mapaCampos = {
             "preg_02_01": "PREG_01_01",
             "preg_02_02": "PREG_01_02",
             "preg_02_03": "PREG_01_03",
@@ -509,75 +523,132 @@ $(document).ready(function () {
             "obs_06_01": "OBS_05_01"
         };
 
-        // 🆕 RECOLECTAR CAMPOS EXCLUYENDO ARCHIVOS DE IMAGEN
+        // Recolectar preguntas normales y observaciones
         $("input, select, textarea").not("input[type='file']").each(function () {
-            const $element = $(this);
-            const fieldName = $element.attr("name");
+            const $el = $(this);
+            const rawName = $el.attr("name");
+            if (!rawName) return;
 
-            if (!fieldName) return; // Skip elements without name
+            let valor = null;
 
-            let fieldValue;
-
-            if ($element.is(":radio") && $element.is(":checked")) {
-                fieldValue = $element.attr("data-transformado") || $element.val();
-            } else if ($element.is(":checkbox")) {
-                fieldValue = $element.is(":checked") ? $element.val() : null;
-            } else if (!$element.is(":radio")) {
-                fieldValue = $element.val();
-            } else {
-                return; // Skip unchecked radio buttons
+            if ($el.is(":radio") && $el.is(":checked")) {
+                valor = $el.attr("data-transformado") || $el.val();
+            } else if (!$el.is(":radio")) {
+                valor = $el.val();
             }
 
-            if (fieldValue !== null && fieldValue !== undefined && fieldValue !== '') {
-                const control_visitas = mapaCampos[fieldName] || fieldName;
-                datos[control_visitas] = fieldValue;
+            if (!valor || valor.trim() === "") return;
+
+            const codigo = mapaCampos[rawName] || rawName;
+
+            // Detectar sección por código
+            const seccionMatch = codigo.match(/^(PREG|OBS)_([0-9]{2})_/);
+            if (seccionMatch) {
+                const seccionKey = seccionMatch[2]; // ej: '01'
+                const seccionNombre = {
+                    "01": "operaciones",
+                    "02": "administracion",
+                    "03": "producto",
+                    "04": "personal",
+                    "05": "kpi",
+                    "06": "otros"
+                }[seccionKey] || `seccion_${seccionKey}`;
+                if (seccionNombre === "kpi") return; // Evitar duplicar KPIs en secciones
+                if (!seccionesMap[seccionNombre]) seccionesMap[seccionNombre] = [];
+
+                // Convertir código de pregunta a código de imagen
+                let codigoImg = '';
+                if (codigo.startsWith('PREG_')) {
+                    // PREG_01_01 → IMG_02_01
+                    const partes = codigo.split('_');
+                    if (partes.length === 3) {
+                        const seccionInterna = String(parseInt(partes[1]) + 1).padStart(2, '0');
+                        codigoImg = `IMG_${seccionInterna}_${partes[2]}`;
+                    }
+                } else if (codigo.startsWith('OBS_')) {
+                    const mapeoObs = {
+                        'OBS_01_01': 'IMG_OBS_OPE',
+                        'OBS_02_01': 'IMG_OBS_ADM',
+                        'OBS_03_01': 'IMG_OBS_PRO',
+                        'OBS_04_01': 'IMG_OBS_PER',
+                    };
+                    codigoImg = mapeoObs[codigo] || '';
+                }
+
+                const imagenesPregunta = Object.keys(imagenes)
+                    .filter(k => k.startsWith(codigoImg))
+                    .flatMap(k => imagenes[k] || []);
+
+                seccionesMap[seccionNombre].push({
+                    codigo_pregunta: codigo,
+                    respuesta: valor,
+                    imagenes: imagenesPregunta
+                });
             }
         });
 
-        // Agregar variaciones KPI al objeto datos
+        // Recolectar KPIs como bloque separado
+        // Recolectar KPIs como bloque separado
         for (let i = 1; i <= 6; i++) {
-            let nombreCampo = `var_06_0${i}`;
-            let valor = $(`input[name="${nombreCampo}"]`).val();
-            if (valor !== "" && !isNaN(parseFloat(valor))) {
-                datos[`VAR_06_0${i}`] = parseFloat(valor);
+            const nombreCampo = `preg_06_0${i}`;
+            const cod = mapaCampos[nombreCampo] || nombreCampo;
+            const val = $(`input[name="${nombreCampo}"]:checked`).val();
+            const variacion = $(`input[name="var_06_0${i}"]`).val();
+
+            if (val && variacion !== "") {
+                kpis.push({
+                    codigo_pregunta: cod,
+                    valor: val,
+                    variacion: variacion
+                });
             }
         }
 
-        // Specifically check for plan fields
-        $("input[name^='PLAN_'], input[name^='FECHA_PLAN_']").each(function () {
-            let fieldName = $(this).attr("name");
-            let fieldValue = $(this).val().trim();
-            datos[fieldName] = fieldValue.length > 0 ? fieldValue : null;
-        });
+        // Agregar observación KPI como un KPI especial
+        const obsKPI = $(`textarea[name="obs_06_01"]`).val();
+        if (obsKPI && obsKPI.trim() !== "") {
+            kpis.push({
+                codigo_pregunta: "OBS_KPI",
+                valor: obsKPI.trim(),
+                variacion: ""
+            });
+        }
 
-        // Add tienda info
-        let tiendaSeleccionada = $("#CRM_ID_TIENDA option:selected");
-        datos['tienda'] = tiendaSeleccionada.val() + ' - ' + tiendaSeleccionada.data('ubicacion');
-        datos['ubicacion'] = $("#ubicacion").val();
+        // Recolectar Planes de Acción
+        for (let i = 1; i <= 2; i++) {
+            const desc = $(`input[name="PLAN_0${i}"]`).val();
+            const fecha = $(`input[name="FECHA_PLAN_0${i}"]`).val();
+            if (desc && fecha) {
+                planes.push({
+                    descripcion: desc,
+                    fecha_cumplimiento: fecha
+                });
+            }
+        }
 
-        // Standard form fields
-        datos['correo_tienda'] = $("#correo_tienda").val();
-        datos['jefe_zona'] = $("#jefe_zona").val();
-        let paisSeleccionado = $("#pais option:selected");
-        datos['pais'] = paisSeleccionado.data('nombre');
-        datos['zona'] = $("#zona").val();
-        datos['CRM_ID_TIENDA'] = $("#CRM_ID_TIENDA").val();
+        // Recolectar datos generales
+        let tienda = $("#CRM_ID_TIENDA option:selected");
+        let pais = $("#pais option:selected").data("nombre");
+        let datosFinales = {
+            session_id: crypto.randomUUID(),
+            correo_realizo: $("#correo_tienda").val(),
+            lider_zona: $("#jefe_zona").val(),
+            tienda: tienda.val() + " - " + tienda.data("ubicacion"),
+            ubicacion: $("#ubicacion").val(),
+            pais: pais,
+            zona: $("#zona").val(),
+            fecha_hora_inicio: $("#fecha_inicio").val(),
+            fecha_hora_fin: new Date().toISOString(),
+            secciones: Object.entries(seccionesMap).map(([nombre, preguntas]) => ({
+                nombre_seccion: nombre,
+                preguntas: preguntas
+            })),
+            kpis: kpis,
+            planes: planes
+        };
 
-        // 🆕 AGREGAR SOLO URLs DE IMÁGENES YA SUBIDAS (NO ARCHIVOS)
-        /*const imageFields = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER'];
-        imageFields.forEach(fieldName => {
-            // ✅ SOLO usar URLs ya subidas incrementalmente
-            datos[fieldName] = imagenesSubidas[fieldName] || null;
-            console.log(`📎 ${fieldName}: ${datos[fieldName] || 'No subida'}`);
-        });*/
-        // 🆕 AGREGAR TODAS LAS URLs DE IMÁGENES YA SUBIDAS
-        Object.keys(imagenesSubidas).forEach((fieldName) => {
-            datos[fieldName] = imagenesSubidas[fieldName] || null;
-            console.log(`📎 ${fieldName}: ${datos[fieldName] || 'No subida'}`);
-        });
-
-        console.log("📋 Datos finales para envío (SOLO URLs, NO archivos):", datos);
-        return datos;
+        console.log("📦 Estructura final lista para enviar:", datosFinales);
+        return datosFinales;
     }
 
     function guardarSeccion(datos) {
@@ -610,9 +681,10 @@ $(document).ready(function () {
         fetch('/retail/guardar-seccion', {
             method: 'POST',
             headers: {
+                'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': token
             },
-            body: formData
+            body: JSON.stringify(datos),
         }).then(response => {
             if (response.ok) {
                 return response.json();
@@ -678,7 +750,8 @@ $(document).ready(function () {
                 const input = document.querySelector(`input[name='${fieldName}']`);
                 if (input && input.files.length > 0) {
                     // Hay archivo seleccionado, verificar si se subió
-                    if (!imagenesSubidas[fieldName]) {
+                    const imagenesAsociadas = Object.keys(imagenesSubidas).filter(k => k.startsWith(fieldName));
+                    if (imagenesAsociadas.length === 0) {
                         imagenesNoSubidas.push(fieldName);
                     }
                 }
@@ -700,17 +773,17 @@ $(document).ready(function () {
             const totalImagenes = Object.keys(imagenesSubidas).length;
             console.log(`📷 Total de imágenes subidas: ${totalImagenes}`);
 
-            guardarSeccion(obtenerRespuestas());
+            guardarSeccion(obtenerEstructuraFinal());
             dataSaved = true;
 
             mostrarNotificacion(`¡Formulario completado! Se enviaron ${totalImagenes} imágenes correctamente.`, 'success');
-            window.location.replace("/formulario");
+            //window.location.replace("/formulario");
             return;
         }
 
         let hayError = inputsVisibles.some(input => !input.checkValidity());
 
-        if (false) {
+        if (hayError) {
             mostrarNotificacion('Por favor, complete todos los campos requeridos antes de continuar.', 'warning');
             inputsVisibles.find(input => !input.checkValidity())[0].reportValidity();
             return;
