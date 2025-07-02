@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Log;
 
 class RoleCheck
 {
@@ -32,24 +33,24 @@ class RoleCheck
             abort(403, 'No tiene permisos para acceder a esta secci贸n.');
         }
         
-        // AGREGAR ESTAS LÍNEAS NUEVAS:
-        // Validación adicional para acceso por país
+        // AGREGAR ESTAS L锟�0锟�1NEAS NUEVAS:
+        // Validaci锟斤拷n adicional para acceso por pa锟斤拷s
         if ($user['rol'] === 'evaluador_pais') {
             $paisSolicitado = $request->route('pais') ?? $request->get('pais');
             
             if ($paisSolicitado && isset($user['pais_acceso']) && $user['pais_acceso'] !== 'ALL') {
                 if ($user['pais_acceso'] !== $paisSolicitado) {
                     if ($request->expectsJson()) {
-                        return response()->json(['error' => 'Sin acceso a este país'], 403);
+                        return response()->json(['error' => 'Sin acceso a este pa锟斤拷s'], 403);
                     }
                     
-                    abort(403, 'No tiene permisos para acceder a datos de este país.');
+                    abort(403, 'No tiene permisos para acceder a datos de este pa锟斤拷s.');
                 }
             }
         }
 
         // Log de acceso (opcional)
-        \Log::info('Admin access', [
+        Log::info('Admin access', [
             'user_id' => $user['id'],
             'user_email' => $user['email'],
             'role' => $user['rol'],

@@ -25,25 +25,25 @@ class DashboardController extends Controller
         try {
             // Obtener filtros de la sesión o request
             $filtros = $this->obtenerFiltros($request);
-            
+
             // Obtener estadísticas generales (con filtros de país aplicados)
             // Obtener estadísticas generales (con filtros de país aplicados)
             $user = session('admin_user');
             $estadisticas = $this->usuario->getEstadisticasVisitas($filtros, $user);
-            
+
             // Obtener visitas paginadas
             $page = $request->get('page', 1);
             $perPage = config('admin.pagination.per_page', 20);
             $visitas = $this->usuario->getVisitasPaginadas($filtros, $page, $perPage, $user);
             $totalVisitas = $this->usuario->contarVisitas($filtros, $user);
             $totalPages = ceil($totalVisitas / $perPage);
-            
+
             // Obtener datos para filtros
             // Obtener datos para filtros (filtrados según permisos del usuario)
             $user = session('admin_user');
             $paises = $this->usuario->getPaisesDisponibles($user);
             $evaluadores = $this->usuario->getEvaluadoresDisponibles();
-            
+
             // Preparar datos de paginación
             $paginacion = [
                 'current_page' => $page,
@@ -55,20 +55,19 @@ class DashboardController extends Controller
 
             return view('admin.dashboard.index', compact(
                 'estadisticas',
-                'visitas', 
+                'visitas',
                 'paginacion',
                 'filtros',
                 'paises',
                 'evaluadores'
             ));
-
         } catch (\Exception $e) {
             Log::error('Error en dashboard: ' . $e->getMessage());
-            
+
             return view('admin.dashboard.index', [
                 'estadisticas' => [],
                 'visitas' => [],
-                'paginacion' => ['current_page' => 1, 'total' => 0, 'total_pages' => 0],
+                'paginacion' => ['current_page' => 1, 'per_page' => 20, 'total' => 0, 'total_pages' => 0],
                 'filtros' => [],
                 'paises' => [],
                 'evaluadores' => [],
@@ -87,10 +86,10 @@ class DashboardController extends Controller
             $filtros = $this->obtenerFiltros($request, $user);
             $page = $request->get('page', 1);
             $perPage = $request->get('per_page', 20);
-            
+
             $visitas = $this->usuario->getVisitasPaginadas($filtros, $page, $perPage, $user);
             $total = $this->usuario->contarVisitas($filtros, $user);
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $visitas,
@@ -101,10 +100,9 @@ class DashboardController extends Controller
                     'total_pages' => ceil($total / $perPage)
                 ]
             ]);
-
         } catch (\Exception $e) {
             Log::error('Error en getVisitas API: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'error' => 'Error al obtener las visitas'
@@ -116,31 +114,31 @@ class DashboardController extends Controller
      * Obtener y procesar filtros
      */
     private function obtenerFiltros(Request $request, $user = null)
-        {
-            $filtros = [];
-            
-            // AGREGAR ESTAS LÍNEAS AL INICIO:
-            // Validar acceso por país para evaluador_pais
-            if ($user && $user['rol'] === 'evaluador_pais' && isset($user['pais_acceso']) && $user['pais_acceso'] !== 'ALL') {
-                // Forzar filtro por país asignado
-                $filtros['pais'] = $user['pais_acceso'];
-                
-                // Si el usuario intenta filtrar por otro país, ignorar
-                if ($request->has('pais') && $request->pais !== $user['pais_acceso']) {
-                    // Log de intento de acceso no autorizado
-                    Log::warning('Intento de acceso no autorizado', [
-                        'user' => $user['email'],
-                        'pais_solicitado' => $request->pais,
-                        'pais_permitido' => $user['pais_acceso']
-                    ]);
-                }
+    {
+        $filtros = [];
+
+        // AGREGAR ESTAS LÍNEAS AL INICIO:
+        // Validar acceso por país para evaluador_pais
+        if ($user && $user['rol'] === 'evaluador_pais' && isset($user['pais_acceso']) && $user['pais_acceso'] !== 'ALL') {
+            // Forzar filtro por país asignado
+            $filtros['pais'] = $user['pais_acceso'];
+
+            // Si el usuario intenta filtrar por otro país, ignorar
+            if ($request->has('pais') && $request->pais !== $user['pais_acceso']) {
+                // Log de intento de acceso no autorizado
+                Log::warning('Intento de acceso no autorizado', [
+                    'user' => $user['email'],
+                    'pais_solicitado' => $request->pais,
+                    'pais_permitido' => $user['pais_acceso']
+                ]);
             }
+        }
 
         // Filtros de fechas
         if ($request->has('fecha_inicio') && $request->fecha_inicio) {
             $filtros['fecha_inicio'] = $request->fecha_inicio;
         }
-        
+
         if ($request->has('fecha_fin') && $request->fecha_fin) {
             $filtros['fecha_fin'] = $request->fecha_fin;
         }
@@ -154,10 +152,12 @@ class DashboardController extends Controller
         // Filtro por país (para todos los roles excepto evaluador_pais restringido)
         if ($request->has('pais') && $request->pais) {
             // Solo aplicar si el usuario tiene permiso para ese país
-            if (!$user || $user['rol'] !== 'evaluador_pais' || 
-                !isset($user['pais_acceso']) || 
-                $user['pais_acceso'] === 'ALL' || 
-                $user['pais_acceso'] === $request->pais) {
+            if (
+                !$user || $user['rol'] !== 'evaluador_pais' ||
+                !isset($user['pais_acceso']) ||
+                $user['pais_acceso'] === 'ALL' ||
+                $user['pais_acceso'] === $request->pais
+            ) {
                 $filtros['pais'] = $request->pais;
             }
         }
@@ -177,7 +177,7 @@ class DashboardController extends Controller
 
         // Guardar filtros en sesión
         session(['admin_dashboard_filtros' => $filtros]);
-    
+
         // DEBUGGING TEMPORAL - REMOVER DESPUÉS
         Log::info('Filtros procesados', [
             'filtros' => $filtros,
@@ -185,7 +185,7 @@ class DashboardController extends Controller
             'request_tienda' => $request->get('tienda'),
             'user_rol' => $user['rol'] ?? 'no_user'
         ]);
-    
+
         return $filtros;
     }
 
@@ -197,55 +197,52 @@ class DashboardController extends Controller
         session()->forget('admin_dashboard_filtros');
         return redirect()->route('admin.dashboard');
     }
-    
+
     /**
- * Obtener países permitidos según rol del usuario
- */
-public function getPaisesPermitidos()
-{
-    try {
-        $user = session('admin_user');
-        $paises = $this->usuario->getPaisesDisponibles($user);
-        
-        return response()->json([
-            'success' => true,
-            'paises' => $paises,
-            'restriccion' => $user['rol'] === 'evaluador_pais' ? $user['pais_acceso'] : null
-        ]);
-        
-    } catch (\Exception $e) {
-        Log::error('Error al obtener países permitidos: ' . $e->getMessage());
-        
-        return response()->json([
-            'success' => false,
-            'error' => 'Error al obtener países'
-        ], 500);
-    }
-}
+     * Obtener países permitidos según rol del usuario
+     */
+    public function getPaisesPermitidos()
+    {
+        try {
+            $user = session('admin_user');
+            $paises = $this->usuario->getPaisesDisponibles($user);
 
-/**
- * API para obtener lista de tiendas según permisos del usuario
- */
-public function getTiendasDisponibles(Request $request)
-{
-    try {
-        $user = session('admin_user');
-        $tiendas = $this->usuario->getTiendasDisponibles($user);
-        
-        return response()->json([
-            'success' => true,
-            'tiendas' => $tiendas,
-            'total' => count($tiendas)
-        ]);
-        
-    } catch (\Exception $e) {
-        Log::error('Error al obtener tiendas: ' . $e->getMessage());
-        
-        return response()->json([
-            'success' => false,
-            'error' => 'Error al obtener las tiendas'
-        ], 500);
-    }
-}
+            return response()->json([
+                'success' => true,
+                'paises' => $paises,
+                'restriccion' => $user['rol'] === 'evaluador_pais' ? $user['pais_acceso'] : null
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener países permitidos: ' . $e->getMessage());
 
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al obtener países'
+            ], 500);
+        }
+    }
+
+    /**
+     * API para obtener lista de tiendas según permisos del usuario
+     */
+    public function getTiendasDisponibles(Request $request)
+    {
+        try {
+            $user = session('admin_user');
+            $tiendas = $this->usuario->getTiendasDisponibles($user);
+
+            return response()->json([
+                'success' => true,
+                'tiendas' => $tiendas,
+                'total' => count($tiendas)
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener tiendas: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al obtener las tiendas'
+            ], 500);
+        }
+    }
 }

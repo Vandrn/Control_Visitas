@@ -153,7 +153,7 @@ class Usuario
             COUNT(DISTINCT CORREO_REALIZO) as total_evaluadores,
             DATE(MIN(FECHA_HORA_INICIO)) as fecha_primera_visita,
             DATE(MAX(FECHA_HORA_INICIO)) as fecha_ultima_visita
-        FROM `%s.%s.gerente_retail` %s',
+        FROM `%s.%s.GR_nuevo` %s',
         $this->projectId,
         $this->dataset,
         $whereClause
@@ -203,7 +203,7 @@ class Usuario
                  CAST(PREG_01_04 AS FLOAT64) + CAST(PREG_01_05 AS FLOAT64) + CAST(PREG_01_06 AS FLOAT64) + 
                  CAST(PREG_01_07 AS FLOAT64) + CAST(PREG_01_08 AS FLOAT64) + CAST(PREG_01_09 AS FLOAT64) + 
                  CAST(PREG_01_10 AS FLOAT64)) / 10 as puntuacion_general
-            FROM `%s.%s.gerente_retail` 
+            FROM `%s.%s.GR_nuevo` 
             %s
             ORDER BY FECHA_HORA_INICIO DESC
             LIMIT %d OFFSET %d',
@@ -231,7 +231,7 @@ class Usuario
     public function getPaisesDisponibles($userData = null)
     {
         $query = sprintf(
-            'SELECT DISTINCT PAIS FROM `%s.%s.gerente_retail` WHERE PAIS IS NOT NULL',
+            'SELECT DISTINCT PAIS FROM `%s.%s.GR_nuevo` WHERE PAIS IS NOT NULL',
             $this->projectId,
             $this->dataset
         );
@@ -261,7 +261,7 @@ class Usuario
     {
         $query = sprintf(
             'SELECT DISTINCT CORREO_REALIZO, LIDER_ZONA 
-            FROM `%s.%s.gerente_retail` 
+            FROM `%s.%s.GR_nuevo` 
             WHERE CORREO_REALIZO IS NOT NULL 
             ORDER BY CORREO_REALIZO',
             $this->projectId,
@@ -333,7 +333,7 @@ public function contarVisitas($filtros = [], $userData = null)
     $whereClause = $this->buildWhereClause($filtros, $userData); // ✅ Pasar userData
         
         $query = sprintf(
-            'SELECT COUNT(*) as total FROM `%s.%s.gerente_retail` %s',
+            'SELECT COUNT(*) as total FROM `%s.%s.GR_nuevo` %s',
             $this->projectId,
             $this->dataset,
             $whereClause
@@ -356,7 +356,7 @@ public function contarVisitas($filtros = [], $userData = null)
         // Construir query base
 $query = sprintf(
     'SELECT concat(gr.PAIS,left(gr.TIENDA,3)) BV_PAIS_TIENDA, a.GEO as TIENDA_COORDENADAS, gr.*
-    FROM `%s.%s.gerente_retail` gr
+    FROM `%s.%s.GR_nuevo` gr
     LEFT JOIN (
         SELECT concat(dsm.LATITUD,",",replace(dsm.LONGITUD,"\'","")) GEO, dsm.PAIS_TIENDA
         FROM `%s.bi_lab.dim_store_master` dsm
@@ -769,7 +769,7 @@ public function tieneAccesoPais($pais, $userData)
 public function getTiendasDisponibles($userData = null)
 {
     $query = sprintf(
-        'SELECT DISTINCT a.TIENDA FROM `%s.%s.gerente_retail` a WHERE a.TIENDA IS NOT NULL',
+        'SELECT DISTINCT a.TIENDA FROM `%s.%s.GR_nuevo` a WHERE a.TIENDA IS NOT NULL',
         $this->projectId,
         $this->dataset
     );
