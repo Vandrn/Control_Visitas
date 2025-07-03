@@ -41,7 +41,10 @@ class FormularioController extends Controller
         session(['form_id' => $formId]);
 
         // Fetch data from BigQuery
-        $query = 'SELECT * FROM `adoc-bi-dev.OPB.GR_nuevo` WHERE session_id = @session_id';
+        $query = sprintf(
+            'SELECT * FROM `adoc-bi-dev.OPB.%s` WHERE session_id = @session_id',
+            config('admin.bigquery.visitas_table')
+        );
         $queryJobConfig = $this->bigQuery->query($query)->parameters(['session_id' => $formId]);
         $resultados = $this->bigQuery->runQuery($queryJobConfig);
 

@@ -11,6 +11,12 @@ class Usuario
     protected $table = 'usuarios';
     protected $dataset = 'OPB';
     protected $projectId = 'adoc-bi-dev';
+    /**
+     * Tabla de visitas en BigQuery
+     *
+     * @var string
+     */
+    protected $visitasTable;
 
     public function __construct()
     {
@@ -18,6 +24,7 @@ class Usuario
             'projectId' => config('admin.bigquery.project_id'),
             'keyFilePath' => storage_path('app' . config('admin.bigquery.key_file')),
         ]);
+        $this->visitasTable = config('admin.bigquery.visitas_table');
     }
 
     /**
@@ -153,9 +160,10 @@ class Usuario
             COUNT(DISTINCT CORREO_REALIZO) as total_evaluadores,
             DATE(MIN(FECHA_HORA_INICIO)) as fecha_primera_visita,
             DATE(MAX(FECHA_HORA_INICIO)) as fecha_ultima_visita
-        FROM `%s.%s.GR_nuevo` %s',
+        FROM `%s.%s.%s` %s',
         $this->projectId,
         $this->dataset,
+        $this->visitasTable,
         $whereClause
     );
     
@@ -203,12 +211,13 @@ class Usuario
                  CAST(PREG_01_04 AS FLOAT64) + CAST(PREG_01_05 AS FLOAT64) + CAST(PREG_01_06 AS FLOAT64) + 
                  CAST(PREG_01_07 AS FLOAT64) + CAST(PREG_01_08 AS FLOAT64) + CAST(PREG_01_09 AS FLOAT64) + 
                  CAST(PREG_01_10 AS FLOAT64)) / 10 as puntuacion_general
-            FROM `%s.%s.GR_nuevo` 
+            FROM `%s.%s.%s`
             %s
             ORDER BY FECHA_HORA_INICIO DESC
             LIMIT %d OFFSET %d',
             $this->projectId,
             $this->dataset,
+            $this->visitasTable,
             $whereClause,
             $perPage,
             $offset
@@ -231,9 +240,10 @@ class Usuario
     public function getPaisesDisponibles($userData = null)
     {
         $query = sprintf(
-            'SELECT DISTINCT PAIS FROM `%s.%s.GR_nuevo` WHERE PAIS IS NOT NULL',
+            'SELECT DISTINCT PAIS FROM `%s.%s.%s` WHERE PAIS IS NOT NULL',
             $this->projectId,
-            $this->dataset
+            $this->dataset,
+            $this->visitasTable
         );
         
         // Si es evaluador_pais, filtrar solo su país
@@ -260,12 +270,13 @@ class Usuario
     public function getEvaluadoresDisponibles()
     {
         $query = sprintf(
-            'SELECT DISTINCT CORREO_REALIZO, LIDER_ZONA 
-            FROM `%s.%s.GR_nuevo` 
-            WHERE CORREO_REALIZO IS NOT NULL 
+            'SELECT DISTINCT CORREO_REALIZO, LIDER_ZONA
+            FROM `%s.%s.%s`
+            WHERE CORREO_REALIZO IS NOT NULL
             ORDER BY CORREO_REALIZO',
             $this->projectId,
-            $this->dataset
+            $this->dataset,
+            $this->visitasTable
         );
 
         $queryJobConfig = $this->bigQuery->query($query);
@@ -333,9 +344,10 @@ public function contarVisitas($filtros = [], $userData = null)
     $whereClause = $this->buildWhereClause($filtros, $userData); // ✅ Pasar userData
         
         $query = sprintf(
-            'SELECT COUNT(*) as total FROM `%s.%s.GR_nuevo` %s',
+            'SELECT COUNT(*) as total FROM `%s.%s.%s` %s',
             $this->projectId,
             $this->dataset,
+            $this->visitasTable,
             $whereClause
         );
 
@@ -356,7 +368,7 @@ public function contarVisitas($filtros = [], $userData = null)
         // Construir query base
 $query = sprintf(
     'SELECT concat(gr.PAIS,left(gr.TIENDA,3)) BV_PAIS_TIENDA, a.GEO as TIENDA_COORDENADAS, gr.*
-    FROM `%s.%s.GR_nuevo` gr
+    FROM `%s.%s.%s` gr
     LEFT JOIN (
         SELECT concat(dsm.LATITUD,",",replace(dsm.LONGITUD,"\'","")) GEO, dsm.PAIS_TIENDA
         FROM `%s.bi_lab.dim_store_master` dsm
@@ -365,6 +377,7 @@ $query = sprintf(
     WHERE gr.id = @id',
     $this->projectId,
     $this->dataset,
+    $this->visitasTable,
     $this->projectId
 );
         // Si es evaluador, verificar que solo vea sus visitas
@@ -769,9 +782,10 @@ public function tieneAccesoPais($pais, $userData)
 public function getTiendasDisponibles($userData = null)
 {
     $query = sprintf(
-        'SELECT DISTINCT a.TIENDA FROM `%s.%s.GR_nuevo` a WHERE a.TIENDA IS NOT NULL',
+        'SELECT DISTINCT a.TIENDA FROM `%s.%s.%s` a WHERE a.TIENDA IS NOT NULL',
         $this->projectId,
-        $this->dataset
+        $this->dataset,
+        $this->visitasTable
     );
     
     // Si es evaluador_pais, filtrar solo su país
