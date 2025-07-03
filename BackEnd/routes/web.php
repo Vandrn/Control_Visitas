@@ -84,42 +84,43 @@ Route::middleware(['admin.auth'])->group(function () {
 // RUTAS DE DEBUGGING (quitar en producción)
 // ===============================================
 
-Route::get('/test-route', function () {
-    return response()->json([
-        'status' => 'Laravel funcionando correctamente',
-        'timestamp' => now()->toISOString(),
-        'user_authenticated' => session('admin_user') ? true : false,
-        'user_data' => session('admin_user') ? session('admin_user') : null,
-        'session_id' => session()->getId(),
-        'url' => request()->url(),
-        'method' => request()->method()
-    ]);
-})->name('admin.test');
-
-// Ruta para verificar conexión BigQuery
-Route::get('/test-bigquery', function () {
-    try {
-        $usuario = new \App\Models\Usuario();
-        $estadisticas = $usuario->getEstadisticasVisitas();
+if (config('app.debug')) {
+    Route::get('/test-route', function () {
         return response()->json([
-            'status' => 'BigQuery conectado correctamente',
-            'estadisticas' => $estadisticas
+            'status' => 'Laravel funcionando correctamente',
+            'timestamp' => now()->toISOString(),
+            'user_authenticated' => session('admin_user') ? true : false,
+            'user_data' => session('admin_user') ? session('admin_user') : null,
+            'session_id' => session()->getId(),
+            'url' => request()->url(),
+            'method' => request()->method()
         ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'Error en BigQuery',
-            'error' => $e->getMessage()
-        ], 500);
-    }
-})->name('admin.test.bigquery');
+    })->name('admin.test');
 
-// ===============================================
-// RUTAS TEMPORALES PARA LIMPIAR CACHÉ (ELIMINAR DESPUÉS)
-// ===============================================
+    // Ruta para verificar conexión BigQuery
+    Route::get('/test-bigquery', function () {
+        try {
+            $usuario = new \App\Models\Usuario();
+            $estadisticas = $usuario->getEstadisticasVisitas();
+            return response()->json([
+                'status' => 'BigQuery conectado correctamente',
+                'estadisticas' => $estadisticas
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'Error en BigQuery',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    })->name('admin.test.bigquery');
 
-Route::get('/clear-cache', function() {
-    try {
-        $results = [];
+    // ===============================================
+    // RUTAS TEMPORALES PARA LIMPIAR CACHÉ (ELIMINAR DESPUÉS)
+    // ===============================================
+
+    Route::get('/clear-cache', function() {
+        try {
+            $results = [];
         
         // Limpiar caché de rutas
         if (file_exists(base_path('bootstrap/cache/routes-v7.php'))) {
@@ -217,3 +218,4 @@ Route::get('/generate-key', function() {
         'instruction' => 'Copia esta clave y ponla en tu archivo .env como APP_KEY=' . $key
     ]);
 });
+}

@@ -143,9 +143,11 @@ public function imagenes($id)
                     $fileName = basename(parse_url($urlOriginal, PHP_URL_PATH));
                     
                     // Log para debugging
-                    Log::info("Procesando imagen: $columna");
-                    Log::info("URL Original: $urlOriginal");
-                    Log::info("Nombre archivo: $fileName");
+                    if (config('app.debug')) {
+                        Log::info("Procesando imagen: $columna");
+                        Log::info("URL Original: $urlOriginal");
+                        Log::info("Nombre archivo: $fileName");
+                    }
                     
                     // Generar URL firmada válida por 2 horas
                     $object = $bucket->object('observaciones/' . $fileName);
@@ -153,7 +155,9 @@ public function imagenes($id)
                     // Verificar si el objeto existe
                     if ($object->exists()) {
                         $signedUrl = $object->signedUrl(new \DateTime('+2 hours'));
-                        Log::info("URL Firmada generada: $signedUrl");
+                        if (config('app.debug')) {
+                            Log::info("URL Firmada generada: $signedUrl");
+                        }
                         
                         $imagenes[] = [
                             'area' => $columna,
@@ -164,13 +168,17 @@ public function imagenes($id)
                             'existe' => true
                         ];
                     } else {
-                        Log::warning("Archivo no encontrado en bucket: observaciones/$fileName");
+                        if (config('app.debug')) {
+                            Log::warning("Archivo no encontrado en bucket: observaciones/$fileName");
+                        }
                         
                         // Intentar sin la carpeta observaciones
                         $objectDirect = $bucket->object($fileName);
                         if ($objectDirect->exists()) {
                             $signedUrl = $objectDirect->signedUrl(new \DateTime('+2 hours'));
-                            Log::info("URL Firmada (directa) generada: $signedUrl");
+                            if (config('app.debug')) {
+                                Log::info("URL Firmada (directa) generada: $signedUrl");
+                            }
                             
                             $imagenes[] = [
                                 'area' => $columna,
@@ -220,7 +228,9 @@ public function imagenes($id)
             'evaluador' => $visitaRaw['LIDER_ZONA'] ?? $visitaRaw['CORREO_REALIZO']
         ];
 
-        Log::info("Total de imágenes procesadas: " . count($imagenes));
+        if (config('app.debug')) {
+            Log::info("Total de imágenes procesadas: " . count($imagenes));
+        }
 
         return view('admin.visitas.imagenes', compact('imagenes', 'infoVisita'));
 
