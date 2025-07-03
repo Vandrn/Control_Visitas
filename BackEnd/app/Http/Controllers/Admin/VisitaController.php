@@ -25,8 +25,8 @@ class VisitaController extends Controller
         try {
             $user = session('admin_user');
             
-            // Obtener visita con campos anidados
-            $visitaRaw = $this->usuario->getVisitaNested(
+            // Obtener visita completa
+            $visitaRaw = $this->usuario->getVisitaCompleta(
                 $id,
                 $user['rol'],
                 $user['email']
@@ -42,7 +42,7 @@ class VisitaController extends Controller
             }
 
             // Procesar datos para display
-            $visita = $this->usuario->formatearVisitaNested($visitaRaw);
+            $visita = $this->usuario->procesarDatosVisita($visitaRaw);
             
             // Calcular puntuaciones
             $puntuaciones = $this->usuario->calcularPuntuaciones($visita);
@@ -84,8 +84,8 @@ public function imagenes($id)
     try {
         $user = session('admin_user');
         
-        // Obtener la visita con campos anidados
-        $visitaRaw = $this->usuario->getVisitaNested(
+        // Obtener la visita
+        $visitaRaw = $this->usuario->getVisitaCompleta(
             $id,
             $user['rol'],
             $user['email']
@@ -252,7 +252,7 @@ public function imagenes($id)
         try {
             $user = session('admin_user');
             
-            $visitaRaw = $this->usuario->getVisitaNested(
+            $visitaRaw = $this->usuario->getVisitaCompleta(
                 $id,
                 $user['rol'],
                 $user['email']
@@ -274,7 +274,7 @@ public function imagenes($id)
                 ], 403);
             }
 
-            $visita = $this->usuario->formatearVisitaNested($visitaRaw);
+            $visita = $this->usuario->procesarDatosVisita($visitaRaw);
             $puntuaciones = $this->usuario->calcularPuntuaciones($visita);
 
             // �9�9 AGREGAR VALIDACI�0�7N DE DISTANCIA PARA API
