@@ -142,7 +142,8 @@ class Usuario
         $userData = session('admin_user');
     }
     
-    $whereClause = $this->buildWhereClause($filtros, $userData);
+    $params = [];
+    $whereClause = $this->buildWhereClause($filtros, $userData, $params);
     
     $query = sprintf(
         'SELECT 
@@ -159,7 +160,8 @@ class Usuario
         $whereClause
     );
     
-    $queryJobConfig = $this->bigQuery->query($query);
+    $queryJobConfig = $this->bigQuery->query($query)
+        ->parameters($params);
     $results = $this->bigQuery->runQuery($queryJobConfig);
     
     foreach ($results->rows() as $row) {
@@ -182,7 +184,8 @@ class Usuario
      */
     public function getVisitasPaginadas($filtros = [], $page = 1, $perPage = 20, $userData = null)
     {
-        $whereClause = $this->buildWhereClause($filtros, $userData); // ✅ Pasar userData
+        $params = [];
+        $whereClause = $this->buildWhereClause($filtros, $userData, $params); // ✅ Pasar userData
         $offset = ($page - 1) * $perPage;
         
         $query = sprintf(
@@ -214,7 +217,8 @@ class Usuario
             $offset
         );
 
-        $queryJobConfig = $this->bigQuery->query($query);
+        $queryJobConfig = $this->bigQuery->query($query)
+            ->parameters($params);
         $results = $this->bigQuery->runQuery($queryJobConfig);
 
         $visitas = [];
@@ -235,15 +239,21 @@ class Usuario
             $this->projectId,
             $this->dataset
         );
-        
+
+        $params = [];
         // Si es evaluador_pais, filtrar solo su país
-        if ($userData && $userData['rol'] === 'evaluador_pais' && isset($userData['pais_acceso']) && $userData['pais_acceso'] !== 'ALL') {
-            $query .= " AND PAIS = '" . $userData['pais_acceso'] . "'";
+        if (
+            $userData && $userData['rol'] === 'evaluador_pais' &&
+            isset($userData['pais_acceso']) && $userData['pais_acceso'] !== 'ALL'
+        ) {
+            $query .= ' AND PAIS = @pais_acceso';
+            $params['pais_acceso'] = $this->sanitize($userData['pais_acceso']);
         }
-        
+
         $query .= ' ORDER BY PAIS';
-    
-        $queryJobConfig = $this->bigQuery->query($query);
+
+        $queryJobConfig = $this->bigQuery->query($query)
+            ->parameters($params);
         $results = $this->bigQuery->runQuery($queryJobConfig);
     
         $paises = [];
@@ -285,52 +295,79 @@ class Usuario
     /**
      * Construir cláusula WHERE basada en filtros
      */
-    private function buildWhereClause($filtros = [], $userData = null)
-{
-    $conditions = [];
+    private function buildWhereClause($filtros = [], $userData = null, array &$params = [])
+    {
+        $conditions = [];
 
-    // Filtro por rol de usuario (CÓDIGO EXISTENTE QUE FUNCIONA)
-    if (!$userData) {
-        $userData = session('admin_user');
-    }
-    
-    if ($userData && $userData['rol'] === 'evaluador') {
-        // Los evaluadores solo ven sus propias visitas
-        $conditions[] = "CORREO_REALIZO = '" . $userData['email'] . "'";
+        if (!$userData) {
+            $userData = session('admin_user');
+        }
+
+        // Filtro por rol de usuario
+        if ($userData && $userData['rol'] === 'evaluador') {
+            $conditions[] = 'CORREO_REALIZO = @evaluador_email';
+            $params['evaluador_email'] = $this->sanitize($userData['email']);
+        }
+
+        // Filtro automático por país para evaluador_pais
+        if (
+            $userData &&
+            $userData['rol'] === 'evaluador_pais' &&
+            isset($userData['pais_acceso']) &&
+            $userData['pais_acceso'] !== 'ALL'
+        ) {
+            $conditions[] = 'PAIS = @pais_acceso';
+            $params['pais_acceso'] = $this->sanitize($userData['pais_acceso']);
+        }
+
+        // Filtros manuales
+        if (!empty($filtros['fecha_inicio']) && $this->validarFecha($filtros['fecha_inicio'])) {
+            $conditions[] = 'DATE(FECHA_HORA_INICIO) >= @fecha_inicio';
+            $params['fecha_inicio'] = $filtros['fecha_inicio'];
+        }
+        if (!empty($filtros['fecha_fin']) && $this->validarFecha($filtros['fecha_fin'])) {
+            $conditions[] = 'DATE(FECHA_HORA_INICIO) <= @fecha_fin';
+            $params['fecha_fin'] = $filtros['fecha_fin'];
+        }
+        if (!empty($filtros['pais'])) {
+            $conditions[] = 'PAIS = @pais';
+            $params['pais'] = $this->sanitize($filtros['pais']);
+        }
+        if (!empty($filtros['tienda'])) {
+            $conditions[] = 'TIENDA LIKE @tienda';
+            $params['tienda'] = '%' . $this->sanitize($filtros['tienda']) . '%';
+        }
+        if (!empty($filtros['evaluador'])) {
+            $conditions[] = 'CORREO_REALIZO = @evaluador';
+            $params['evaluador'] = $this->sanitize($filtros['evaluador']);
+        }
+
+        return !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
     }
 
-    // AGREGAR SOLO ESTO - SIMPLE Y DIRECTO:
-    // Filtro automático por país para evaluador_pais
-    if ($userData && $userData['rol'] === 'evaluador_pais' && isset($userData['pais_acceso']) && $userData['pais_acceso'] !== 'ALL') {
-        $conditions[] = "PAIS = '" . $userData['pais_acceso'] . "'";
+    /**
+     * Validar formato de fecha (YYYY-MM-DD)
+     */
+    private function validarFecha($fecha)
+    {
+        return is_string($fecha) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha);
     }
 
-    // Filtros manuales (CÓDIGO EXISTENTE)
-    if (!empty($filtros['fecha_inicio'])) {
-        $conditions[] = "DATE(FECHA_HORA_INICIO) >= '" . $filtros['fecha_inicio'] . "'";
+    /**
+     * Sanitizar texto básico
+     */
+    private function sanitize($valor)
+    {
+        return is_string($valor) ? trim(strip_tags($valor)) : $valor;
     }
-    if (!empty($filtros['fecha_fin'])) {
-        $conditions[] = "DATE(FECHA_HORA_INICIO) <= '" . $filtros['fecha_fin'] . "'";
-    }
-    if (!empty($filtros['pais'])) {
-        $conditions[] = "PAIS = '" . $filtros['pais'] . "'";
-    }
-    if (!empty($filtros['tienda'])) {
-        $conditions[] = "TIENDA LIKE '%" . $filtros['tienda'] . "%'";
-    }
-    if (!empty($filtros['evaluador'])) {
-        $conditions[] = "CORREO_REALIZO = '" . $filtros['evaluador'] . "'";
-    }
-
-    return !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
-}
 
     /**
      * Contar total de visitas con filtros
      */
 public function contarVisitas($filtros = [], $userData = null)
 {
-    $whereClause = $this->buildWhereClause($filtros, $userData); // ✅ Pasar userData
+    $params = [];
+    $whereClause = $this->buildWhereClause($filtros, $userData, $params); // ✅ Pasar userData
         
         $query = sprintf(
             'SELECT COUNT(*) as total FROM `%s.%s.GR_nuevo` %s',
@@ -339,7 +376,8 @@ public function contarVisitas($filtros = [], $userData = null)
             $whereClause
         );
 
-        $queryJobConfig = $this->bigQuery->query($query);
+        $queryJobConfig = $this->bigQuery->query($query)
+            ->parameters($params);
         $results = $this->bigQuery->runQuery($queryJobConfig);
 
         foreach ($results->rows() as $row) {
@@ -773,15 +811,21 @@ public function getTiendasDisponibles($userData = null)
         $this->projectId,
         $this->dataset
     );
-    
+
+    $params = [];
     // Si es evaluador_pais, filtrar solo su país
-    if ($userData && $userData['rol'] === 'evaluador_pais' && isset($userData['pais_acceso']) && $userData['pais_acceso'] !== 'ALL') {
-        $query .= " AND a.PAIS = '" . $userData['pais_acceso'] . "'";
+    if (
+        $userData && $userData['rol'] === 'evaluador_pais' &&
+        isset($userData['pais_acceso']) && $userData['pais_acceso'] !== 'ALL'
+    ) {
+        $query .= ' AND a.PAIS = @pais_acceso';
+        $params['pais_acceso'] = $this->sanitize($userData['pais_acceso']);
     }
-    
+
     $query .= ' ORDER BY a.TIENDA';
 
-    $queryJobConfig = $this->bigQuery->query($query);
+    $queryJobConfig = $this->bigQuery->query($query)
+        ->parameters($params);
     $results = $this->bigQuery->runQuery($queryJobConfig);
 
     $tiendas = [];
