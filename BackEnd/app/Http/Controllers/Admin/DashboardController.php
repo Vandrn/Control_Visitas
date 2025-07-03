@@ -29,14 +29,14 @@ class DashboardController extends Controller
             // Obtener estadísticas generales (con filtros de país aplicados)
             // Obtener estadísticas generales (con filtros de país aplicados)
             $user = session('admin_user');
-            // Usar métodos basados en UNNEST
-            $estadisticas = $this->usuario->getEstadisticasVisitasNested($filtros, $user);
+            // Obtener estadísticas generales
+            $estadisticas = $this->usuario->getEstadisticasVisitas($filtros, $user);
 
             // Obtener visitas paginadas
             $page = $request->get('page', 1);
             $perPage = config('admin.pagination.per_page', 20);
-            $visitas = $this->usuario->getVisitasPaginadasNested($filtros, $page, $perPage, $user);
-            $totalVisitas = $this->usuario->contarVisitasNested($filtros, $user);
+            $visitas = $this->usuario->getVisitasPaginadas($filtros, $page, $perPage, $user);
+            $totalVisitas = $this->usuario->contarVisitas($filtros, $user);
             $totalPages = ceil($totalVisitas / $perPage);
 
             // Obtener datos para filtros
@@ -88,8 +88,8 @@ class DashboardController extends Controller
             $page = $request->get('page', 1);
             $perPage = $request->get('per_page', 20);
 
-            $visitas = $this->usuario->getVisitasPaginadasNested($filtros, $page, $perPage, $user);
-            $total = $this->usuario->contarVisitasNested($filtros, $user);
+            $visitas = $this->usuario->getVisitasPaginadas($filtros, $page, $perPage, $user);
+            $total = $this->usuario->contarVisitas($filtros, $user);
 
             return response()->json([
                 'success' => true,

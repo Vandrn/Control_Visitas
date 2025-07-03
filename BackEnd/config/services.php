@@ -59,8 +59,6 @@ return [
         'dataset' => env('BIGQUERY_ADMIN_DATASET', 'OPB'),
         'usuarios_table' => env('BIGQUERY_USUARIOS_TABLE', 'usuarios'),
         'visitas_table' => env('BIGQUERY_VISITAS_TABLE', 'GR_nuevo'),
-        // Tabla alternativa con campos anidados
-        'visitas_nested_table' => env('BIGQUERY_VISITAS_NESTED_TABLE', 'GR_nested'),
     ],
 
 ];
