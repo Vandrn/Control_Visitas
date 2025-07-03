@@ -8,12 +8,15 @@ use Illuminate\Support\Facades\Hash;
 class Usuario
 {
     protected $bigQuery;
+
     protected $table = 'usuarios';
     protected $dataset = 'OPB';
     protected $projectId = 'adoc-bi-dev';
 
     // Tabla con campos anidados para nuevas consultas
     protected $nestedTable = 'GR_nested';
+    // Tabla principal de visitas (faltaba definirla)
+    protected $visitasTable = 'GR';
 
 
     public function __construct()
