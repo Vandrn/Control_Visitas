@@ -7,9 +7,17 @@
     </div>
     
     <div class="p-6">
-        @if(isset($visita['planes_accion']) && count($visita['planes_accion']) > 0)
+        @php
+            $listaPlanes = [];
+            if(isset($visita['planes'])) {
+                $listaPlanes = $visita['planes'];
+            } elseif(isset($visita['planes_accion'])) {
+                $listaPlanes = $visita['planes_accion'];
+            }
+        @endphp
+        @if(count($listaPlanes) > 0)
             @php
-                $planesConDatos = array_filter($visita['planes_accion'], function($plan) {
+                $planesConDatos = array_filter($listaPlanes, function($plan) {
                     return !empty($plan['descripcion']);
                 });
                 
@@ -23,7 +31,7 @@
             
             @if(count($planesConDatos) > 0)
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    @foreach($visita['planes_accion'] as $planId => $plan)
+                    @foreach($listaPlanes as $planId => $plan)
                         @if(!empty($plan['descripcion']))
                             @php
                                 $fechaVencimiento = !empty($plan['fecha_vencimiento']) ? 
