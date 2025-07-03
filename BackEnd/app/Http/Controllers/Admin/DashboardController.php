@@ -180,12 +180,14 @@ class DashboardController extends Controller
         session(['admin_dashboard_filtros' => $filtros]);
 
         // DEBUGGING TEMPORAL - REMOVER DESPUÉS
-        Log::info('Filtros procesados', [
-            'filtros' => $filtros,
-            'request_pais' => $request->get('pais'),
-            'request_tienda' => $request->get('tienda'),
-            'user_rol' => $user['rol'] ?? 'no_user'
-        ]);
+        if (config('app.debug')) {
+            Log::info('Filtros procesados', [
+                'filtros' => $filtros,
+                'request_pais' => $request->get('pais'),
+                'request_tienda' => $request->get('tienda'),
+                'user_rol' => $user['rol'] ?? 'no_user'
+            ]);
+        }
 
         return $filtros;
     }
