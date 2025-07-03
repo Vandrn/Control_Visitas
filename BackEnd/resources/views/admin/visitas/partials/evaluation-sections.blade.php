@@ -32,16 +32,24 @@
             'preguntas' => $textosPreguntas['kpis'] ?? []
         ]
     ];
+    // Si la visita viene en formato anidado, reorganizar datos
+    $seccionesVisita = [];
+    if(isset($visita['secciones']) && is_array($visita['secciones'])) {
+        foreach($visita['secciones'] as $sec) {
+            $seccionesVisita[strtolower($sec['id'])] = $sec;
+        }
+    }
 @endphp
 
 <div class="accordion" id="evaluationAccordion">
     @foreach($secciones as $seccionId => $seccionInfo)
-        @if(isset($visita[$seccionId]))
-            @php
-                $seccionData = $visita[$seccionId];
-                $puntuacion = $puntuaciones[$seccionId] ?? null;
-                $isFirst = $loop->first;
-            @endphp
+        @php
+            $seccionData = $visita[$seccionId] ?? ($seccionesVisita[$seccionId] ?? null);
+        @endphp
+        @if($seccionData)
+            $puntuacion = $puntuaciones[$seccionId] ?? null;
+            $isFirst = $loop->first;
+        @endphp
             
             <div class="card mb-3" id="{{ $seccionId }}">
                 <div class="card-header" id="heading{{ ucfirst($seccionId) }}">
