@@ -23,6 +23,8 @@ return [
         'dataset' => env('BIGQUERY_ADMIN_DATASET', 'OPB'),
         'usuarios_table' => env('BIGQUERY_USUARIOS_TABLE', 'usuarios'),
         'visitas_table' => env('BIGQUERY_VISITAS_TABLE', 'GR_nuevo'),
+        // Tabla con esquema anidado para consultas avanzadas
+        'visitas_nested_table' => env('BIGQUERY_VISITAS_NESTED_TABLE', 'GR_nested'),
         'key_file' => env('BIGQUERY_KEY_FILE', '/claves/adoc-bi-dev-debcb06854ae.json'),
     ],
 

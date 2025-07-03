@@ -25,10 +25,10 @@ class VisitaController extends Controller
         try {
             $user = session('admin_user');
             
-            // Obtener visita completa
-            $visitaRaw = $this->usuario->getVisitaCompleta(
-                $id, 
-                $user['rol'], 
+            // Obtener visita con campos anidados
+            $visitaRaw = $this->usuario->getVisitaNested(
+                $id,
+                $user['rol'],
                 $user['email']
             );
             
@@ -42,7 +42,7 @@ class VisitaController extends Controller
             }
 
             // Procesar datos para display
-            $visita = $this->usuario->procesarDatosVisita($visitaRaw);
+            $visita = $this->usuario->formatearVisitaNested($visitaRaw);
             
             // Calcular puntuaciones
             $puntuaciones = $this->usuario->calcularPuntuaciones($visita);
@@ -84,10 +84,10 @@ public function imagenes($id)
     try {
         $user = session('admin_user');
         
-        // Obtener la visita completa
-        $visitaRaw = $this->usuario->getVisitaCompleta(
-            $id, 
-            $user['rol'], 
+        // Obtener la visita con campos anidados
+        $visitaRaw = $this->usuario->getVisitaNested(
+            $id,
+            $user['rol'],
             $user['email']
         );
 
@@ -242,9 +242,9 @@ public function imagenes($id)
         try {
             $user = session('admin_user');
             
-            $visitaRaw = $this->usuario->getVisitaCompleta(
-                $id, 
-                $user['rol'], 
+            $visitaRaw = $this->usuario->getVisitaNested(
+                $id,
+                $user['rol'],
                 $user['email']
             );
 
@@ -264,7 +264,7 @@ public function imagenes($id)
                 ], 403);
             }
 
-            $visita = $this->usuario->procesarDatosVisita($visitaRaw);
+            $visita = $this->usuario->formatearVisitaNested($visitaRaw);
             $puntuaciones = $this->usuario->calcularPuntuaciones($visita);
 
             // �9�9 AGREGAR VALIDACI�0�7N DE DISTANCIA PARA API
