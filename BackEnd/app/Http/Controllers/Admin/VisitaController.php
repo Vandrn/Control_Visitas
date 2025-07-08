@@ -32,6 +32,9 @@ class VisitaController extends Controller
                 $user['email']
             );
 
+            // Obtener KPIs de la visita
+            $kpis = $visitaRaw['kpis'] ?? [];
+
             if (!$visitaRaw) {
                 abort(404, 'Visita no encontrada o sin permisos para verla.');
             }
@@ -50,6 +53,12 @@ class VisitaController extends Controller
             // Obtener textos de preguntas
             $textosPreguntas = $this->getTextosPreguntas();
 
+            // Calcular resumen por área para visual-scoring
+            $puntajesPorArea = $this->usuario->calcularPuntajesPorArea($visita);
+
+            // Obtener nombres de KPIs para visualización
+            $kpis_nombres = $textosPreguntas['kpis'] ?? [];
+
             // 📍 AGREGAR VALIDACIÓN DE DISTANCIA
             $validacionDistancia = $this->usuario->getValidacionDistancia(
                 $id,
@@ -61,7 +70,10 @@ class VisitaController extends Controller
                 'visita',
                 'puntuaciones',
                 'textosPreguntas',
-                'validacionDistancia'
+                'validacionDistancia',
+                'puntajesPorArea',
+                'kpis',
+                'kpis_nombres'
             ));
         } catch (\Exception $e) {
             Log::error('Error al mostrar visita: ' . $e->getMessage());
@@ -123,7 +135,7 @@ class VisitaController extends Controller
 
                 foreach ($seccion['preguntas'] as $pregunta) {
                     $codigo = $pregunta['codigo_pregunta'];
-                    $observaciones = $pregunta['observaciones'] ?? null;
+                    $observaciones = $pregunta['observaciones'] ?? $pregunta['respuesta'] ?? null;
                     $urls = $pregunta['imagenes'] ?? [];
 
                     $imagenes = [];
@@ -218,6 +230,7 @@ class VisitaController extends Controller
 
             $visita = $this->usuario->procesarDatosVisita($visitaRaw);
             $puntuaciones = $this->usuario->calcularPuntuaciones($visita);
+            $puntajesPorArea = $this->usuario->calcularPuntajesPorArea($visita);
 
             // �9�9 AGREGAR VALIDACI�0�7N DE DISTANCIA PARA API
             $validacionDistancia = $this->usuario->getValidacionDistancia(
@@ -286,26 +299,26 @@ class VisitaController extends Controller
                 'PREG_03_02' => 'Artículos exhibidos con su etiqueta y precio correcto. Nota: Si un zapato llega dañado de fábrica reportarlo de inmediato y retírelo del piso de venta.',
                 'PREG_03_03' => 'Cambios de precio realizado, firmado y archivado. Nota: Es prohibido colocar otro precio que no sea el oficial.',
                 'PREG_03_04' => 'Promociones actualizadas y compartidas con todo el personal.',
-                'PREG_03_06' => 'Implementación de planogramas(Producto, POP, Manuales).',
-                'PREG_03_07' => 'En las exhibiciones están todos los estilos disponibles en la tienda representados por talla (sin ningún zapato dañado o sucio).',
-                'PREG_03_08' => 'Todas las sandalias en exhibidores y/o mesas usan modeladores acrílicos.',
-                'PREG_03_09' => 'Todas las sandalias y zapatos abiertos tienen un acrílico.',
-                'PREG_03_10' => 'Todas las carteras tienen un alzador en las exhibiciones.',
+                'PREG_03_05' => 'Implementación de planogramas(Producto, POP, Manuales).',
+                'PREG_03_06' => 'En las exhibiciones están todos los estilos disponibles en la tienda representados por talla (sin ningún zapato dañado o sucio).',
+                'PREG_03_07' => 'Todas las sandalias en exhibidores y/o mesas usan modeladores acrílicos.',
+                'PREG_03_08' => 'Todas las sandalias y zapatos abiertos tienen un acrílico.',
+                'PREG_03_09' => 'Todas las carteras tienen un alzador en las exhibiciones.',
             ],
             'personal' => [
-                'PREG_04_02' => 'Personal con imagen presentable, con su respectivo uniforme según política.',
-                'PREG_04_04' => 'Amabilidad en el recibimiento de los clientes.',
-                'PREG_04_05' => 'Cumplimiento de protocolos de bioseguridad.',
-                'PREG_04_06' => 'Disponibilidad del personal para ayudar durante el recorrido, selección y prueba de calzado.',
-                'PREG_04_07' => 'Nuestros ADOCKERS ofrecen ayuda a todos los clientes.',
-                'PREG_04_08' => 'Nuestros ADOCKERS ofrecen encontrar la talla que el cliente pide y si no hay talla, ofrecen alternativas.',
-                'PREG_04_09' => 'Nuestros ADOCKERS ofrecen medir el pie de los niños.',
-                'PREG_04_10' => 'Se ofrecen diferentes zapatos para que ajuste el pie correctamente cuando hay niños.',
-                'PREG_04_11' => 'Nuestros ADOCKERS elogian a los clientes por su elección de producto.',
-                'PREG_04_12' => 'Nuestros clientes son atendidos rápidamente en caja.',
-                'PREG_04_13' => '¿Han realizado los cursos de Academia ADOC?',
-                'PREG_04_14' => '¿Adockers hacen uso de la APP ADOCKY cuando atienden a los clientes en el piso de venta?',
-                'PREG_04_15' => 'Adockers hacen uso de la APP ADOCKY para realizar la representación de inventario.',
+                'PREG_04_01' => 'Personal con imagen presentable, con su respectivo uniforme según política.',
+                'PREG_04_02' => 'Amabilidad en el recibimiento de los clientes.',
+                'PREG_04_03' => 'Cumplimiento de protocolos de bioseguridad.',
+                'PREG_04_04' => 'Disponibilidad del personal para ayudar durante el recorrido, selección y prueba de calzado.',
+                'PREG_04_05' => 'Nuestros ADOCKERS ofrecen ayuda a todos los clientes.',
+                'PREG_04_06' => 'Nuestros ADOCKERS ofrecen encontrar la talla que el cliente pide y si no hay talla, ofrecen alternativas.',
+                'PREG_04_07' => 'Nuestros ADOCKERS ofrecen medir el pie de los niños.',
+                'PREG_04_08' => 'Se ofrecen diferentes zapatos para que ajuste el pie correctamente cuando hay niños.',
+                'PREG_04_09' => 'Nuestros ADOCKERS elogian a los clientes por su elección de producto.',
+                'PREG_04_10' => 'Nuestros clientes son atendidos rápidamente en caja.',
+                'PREG_04_11' => '¿Han realizado los cursos de Academia ADOC?',
+                'PREG_04_12' => '¿Adockers hacen uso de la APP ADOCKY cuando atienden a los clientes en el piso de venta?',
+                'PREG_04_13' => 'Adockers hacen uso de la APP ADOCKY para realizar la representación de inventario.',
             ],
             'kpis' => [
                 'PREG_05_01' => 'Venta',

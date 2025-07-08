@@ -8,11 +8,13 @@
     {{-- Incluir partials --}}
     @include('admin.visitas.partials.header-info')
     
-    {{-- ”9Ý9 AGREGAR VALIDACI0ˆ7N DE DISTANCIA --}}
+    {{-- ï¿½9ï¿½9 AGREGAR VALIDACIï¿½0ï¿½7N DE DISTANCIA --}}
     @include('admin.visitas.partials.distance-validation')
     
-    {{-- AGREGAR ESTA L0ˆ1NEA --}}
+    {{-- AGREGAR ESTA Lï¿½0ï¿½1NEA --}}
     @include('admin.visitas.partials.visual-scoring')
+
+    @include('admin.visitas.partials.kpi')
     
     @include('admin.visitas.partials.action-plans')
 </div>
@@ -20,7 +22,7 @@
 
 @push('styles')
 <style>
-    /* Estilos de impresi¨®n */
+    /* Estilos de impresiï¿½ï¿½n */
     @media print {
         .no-print { display: none !important; }
         .card { border: 1px solid #dee2e6 !important; box-shadow: none !important; }
@@ -34,7 +36,7 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Funcionalidad para navegaci¨®n suave
+    // Funcionalidad para navegaciï¿½ï¿½n suave
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
             e.preventDefault();
@@ -48,7 +50,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Auto-expandir primer acorde¨®n
+    // Auto-expandir primer acordeï¿½ï¿½n
     const firstAccordion = document.querySelector('.accordion-collapse');
     if (firstAccordion && !firstAccordion.classList.contains('show')) {
         firstAccordion.classList.add('show');

@@ -27,7 +27,6 @@ class DashboardController extends Controller
             $filtros = $this->obtenerFiltros($request);
 
             // Obtener estadísticas generales (con filtros de país aplicados)
-            // Obtener estadísticas generales (con filtros de país aplicados)
             $user = session('admin_user');
             // Obtener estadísticas generales
             $estadisticas = $this->usuario->getEstadisticasVisitas($filtros, $user);

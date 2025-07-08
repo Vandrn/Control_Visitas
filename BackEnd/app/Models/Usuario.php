@@ -503,12 +503,13 @@ class Usuario
             ];
 
             foreach ($seccion['preguntas'] as $pregunta) {
-                if (!empty($pregunta['imagenes'])) {
-                    $imagenes[$nombre]['imagenes'][] = [
-                        'codigo_pregunta' => $pregunta['codigo_pregunta'],
-                        'urls' => $pregunta['imagenes']
-                    ];
-                }
+                $preguntas[$pregunta['codigo_pregunta']] = [
+                    'respuesta' => $pregunta['respuesta'],
+                    'observaciones' => $pregunta['observaciones'] ?? null,
+                    'texto_pregunta' => $pregunta['texto_pregunta'] ?? '',
+                    'imagenes' => $pregunta['imagenes'] ?? [],
+                    'codigo_pregunta' => $pregunta['codigo_pregunta']
+                ];
             }
 
             // Eliminar si no hay imágenes
@@ -543,23 +544,39 @@ class Usuario
             'secciones' => []
         ];
 
+        // Reordenar secciones por nombre
         foreach ($visita['secciones'] as $seccion) {
             $nombre = $seccion['nombre_seccion'];
             $preguntas = [];
 
             foreach ($seccion['preguntas'] as $pregunta) {
-                $preguntas[$pregunta['codigo_pregunta']] = [
+                $codigo = $pregunta['codigo_pregunta'];
+                $preguntas[$codigo] = [
                     'respuesta' => $pregunta['respuesta'],
-                    'imagenes' => $pregunta['imagenes'] ?? [],
+                    'imagenes' => $pregunta['imagenes'] ?? []
                 ];
             }
 
-            $resultado['secciones'][$nombre] = $preguntas;
+            // Agrupado por nombre de sección
+            $resultado[$nombre] = [
+                'preguntas' => $preguntas
+            ];
         }
 
-        // Procesar planes
+        // Reorganizar KPIs (si los usás)
+        if (isset($visita['kpis'])) {
+            $kpiPreguntas = [];
+            foreach ($visita['kpis'] as $kpi) {
+                $kpiPreguntas[$kpi['codigo_pregunta']] = $kpi['valor'];
+            }
+            $resultado['kpis'] = [
+                'preguntas' => $kpiPreguntas
+            ];
+        }
+
+        // Reorganizar planes de acción
         if (isset($visita['planes'])) {
-            foreach ($visita['planes'] as $i => $plan) {
+            foreach ($visita['planes'] as $plan) {
                 $resultado['planes_accion'][] = [
                     'descripcion' => $plan['descripcion'],
                     'fecha' => $plan['fecha_cumplimiento']
@@ -573,55 +590,76 @@ class Usuario
     /**
      * Calcular puntuaciones por sección
      */
-    public function calcularPuntuaciones($datosVisita)
+    public function calcularPuntuaciones($visita)
     {
-        $puntuaciones = [];
+        $secciones = ['operaciones', 'administracion', 'producto', 'personal'];
 
-        $secciones = ['operaciones', 'administracion', 'producto', 'personal', 'kpis'];
+        $resultados = [];
 
         foreach ($secciones as $seccion) {
-            if (isset($datosVisita[$seccion]['preguntas'])) {
-                $preguntas = $datosVisita[$seccion]['preguntas'];
-                $total = 0;
-                $contador = 0;
+            if (!isset($visita[$seccion]['preguntas']) || empty($visita[$seccion]['preguntas'])) {
+                continue;
+            }
 
-                foreach ($preguntas as $pregunta => $valor) {
-                    if ($valor !== null && is_numeric($valor)) {
-                        $total += floatval($valor);
-                        $contador++;
-                    }
-                }
+            $preguntas = $visita[$seccion]['preguntas'];
+            $suma = 0;
+            $conteo = 0;
 
-                if ($contador > 0) {
-                    $promedio = $total / $contador;
-                    $puntuaciones[$seccion] = [
-                        'promedio' => $promedio,
-                        'estrellas' => round($promedio * 5, 1), // Convertir 0-1 a 0-5
-                        'porcentaje' => round($promedio * 100, 1),
-                        'total_preguntas' => $contador
-                    ];
-                } else {
-                    $puntuaciones[$seccion] = [
-                        'promedio' => 0,
-                        'estrellas' => 0,
-                        'porcentaje' => 0,
-                        'total_preguntas' => 0
-                    ];
+            foreach ($preguntas as $pregunta) {
+                $respuesta = $pregunta['respuesta'] ?? null;
+                if (is_numeric($respuesta)) {
+                    $suma += floatval($respuesta); // ya deberían venir normalizadas (0.2 a 1)
+                    $conteo++;
                 }
+            }
+
+            if ($conteo > 0) {
+                $promedio = $suma / $conteo;
+                $resultados[$seccion] = [
+                    'promedio' => $promedio,
+                    'porcentaje' => $promedio * 100,
+                    'estrellas' => $promedio * 5,
+                    'total_preguntas' => $conteo
+                ];
             }
         }
 
-        // Calcular puntuación general
-        $totalSecciones = count($puntuaciones);
-        $sumaPromedios = array_sum(array_column($puntuaciones, 'promedio'));
+        return $resultados;
+    }
 
-        $puntuaciones['general'] = [
-            'promedio' => $totalSecciones > 0 ? $sumaPromedios / $totalSecciones : 0,
-            'estrellas' => $totalSecciones > 0 ? round(($sumaPromedios / $totalSecciones) * 5, 1) : 0,
-            'porcentaje' => $totalSecciones > 0 ? round(($sumaPromedios / $totalSecciones) * 100, 1) : 0,
-        ];
+    /**
+     * Calcular puntajes por área para mostrar visualmente
+     */
+    public function calcularPuntajesPorArea($visita)
+    {
+        $resultados = [];
 
-        return $puntuaciones;
+        foreach ($visita['secciones'] as $nombre => $preguntas) {
+            $suma = 0;
+            $total = 0;
+
+            foreach ($preguntas as $codigo => $data) {
+                if (isset($data['respuesta']) && is_numeric($data['respuesta'])) {
+                    $suma += floatval($data['respuesta']);
+                    $total++;
+                }
+            }
+
+            if ($total > 0) {
+                $promedio = round($suma / $total, 2);
+                $porcentaje = round(($promedio / 5) * 100, 1);
+                $estado = $porcentaje >= 80 ? 'Bueno' : ($porcentaje >= 60 ? 'Regular' : 'Bajo');
+
+                $resultados[$nombre] = [
+                    'promedio' => $promedio,
+                    'porcentaje' => $porcentaje,
+                    'estado' => $estado,
+                    'total_preguntas' => $total,
+                ];
+            }
+        }
+
+        return $resultados;
     }
 
     /**

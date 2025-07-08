@@ -44,7 +44,7 @@ return [
     'google' => [
         'project_id' => env('BIGQUERY_PROJECT_ID', 'adoc-bi-dev'),
         'keyfile' => env('BIGQUERY_KEY_FILE', '/claves/adoc-bi-dev-debcb06854ae.json'),
-        'storage_bucket' => env('GOOGLE_CLOUD_STORAGE_BUCKET', 'adoc-bi-dev-control-visitas-lz'),
+        'storage_bucket' => env( 'GOOGLE_CLOUD_STORAGE_BUCKET', 'adoc-bi-dev-control-visitas-lz'),
         'storage_api_uri' => env('GOOGLE_CLOUD_STORAGE_API_URI', 'https://storage.googleapis.com'),
     ],
 
