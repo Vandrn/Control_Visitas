@@ -24,225 +24,167 @@ class VisitaController extends Controller
     {
         try {
             $user = session('admin_user');
-            
+
             // Obtener visita completa
             $visitaRaw = $this->usuario->getVisitaCompleta(
                 $id,
                 $user['rol'],
                 $user['email']
             );
-            
+
             if (!$visitaRaw) {
                 abort(404, 'Visita no encontrada o sin permisos para verla.');
             }
-            
+
             // AGREGAR VALIDACI�0�7N DE ACCESO POR PA�0�1S
             if (!$this->validarAccesoPais($visitaRaw, $user)) {
-                abort(403, 'No tiene permisos para ver visitas de este pa��s.');
+                abort(403, 'No tiene permisos para ver visitas de este país.');
             }
 
             // Procesar datos para display
             $visita = $this->usuario->procesarDatosVisita($visitaRaw);
-            
+
             // Calcular puntuaciones
             $puntuaciones = $this->usuario->calcularPuntuaciones($visita);
 
-// Obtener textos de preguntas
-$textosPreguntas = $this->getTextosPreguntas();
+            // Obtener textos de preguntas
+            $textosPreguntas = $this->getTextosPreguntas();
 
-// 📍 AGREGAR VALIDACIÓN DE DISTANCIA
-$validacionDistancia = $this->usuario->getValidacionDistancia(
-    $id, 
-    $user['rol'], 
-    $user['email']
-);
+            // 📍 AGREGAR VALIDACIÓN DE DISTANCIA
+            $validacionDistancia = $this->usuario->getValidacionDistancia(
+                $id,
+                $user['rol'],
+                $user['email']
+            );
 
-return view('admin.visitas.show', compact(
-    'visita',
-    'puntuaciones', 
-    'textosPreguntas',
-    'validacionDistancia'
-));
-
+            return view('admin.visitas.show', compact(
+                'visita',
+                'puntuaciones',
+                'textosPreguntas',
+                'validacionDistancia'
+            ));
         } catch (\Exception $e) {
             Log::error('Error al mostrar visita: ' . $e->getMessage());
-            
+
             if ($e->getCode() === 404) {
                 abort(404);
             }
-            
+
             return redirect()->route('admin.dashboard')
                 ->with('error', 'Error al cargar el detalle de la visita.');
         }
     }
 
-/**
- * Mostrar galería de imágenes de una visita - VERSIÓN CORREGIDA CON TUS VARIABLES .env
- */
-public function imagenes($id)
-{
-    try {
-        $user = session('admin_user');
-        
-        // Obtener la visita
-        $visitaRaw = $this->usuario->getVisitaCompleta(
-            $id,
-            $user['rol'],
-            $user['email']
-        );
+    /**
+     * Mostrar galería de imágenes de una visita - VERSIÓN CORREGIDA CON TUS VARIABLES .env
+     */
+    public function imagenes($id)
+    {
+        try {
+            $user = session('admin_user');
 
-        if (!$visitaRaw) {
-            abort(404, 'Visita no encontrada o sin permisos para verla.');
-        }
-        
-        // AGREGAR ESTA VALIDACI�0�7N:
-        // Validar acceso por pa��s
-        if (!$this->validarAccesoPais($visitaRaw, $user)) {
-            abort(403, 'No tiene permisos para ver im��genes de visitas de este pa��s.');
-        }
+            $visitaRaw = $this->usuario->getVisitaCompleta(
+                $id,
+                $user['rol'],
+                $user['email']
+            );
 
-        // Inicializar Google Cloud Storage CON TUS VARIABLES .env
-        $storage = new StorageClient([
-            'projectId' => env('BIGQUERY_PROJECT_ID', 'adoc-bi-dev'),
-            'keyFilePath' => storage_path('app' . env('BIGQUERY_KEY_FILE', '/claves/adoc-bi-dev-debcb06854ae.json'))
-        ]);
-        
-        $bucketName = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'adoc-bi-dev-control-visitas-lz');
-        $bucket = $storage->bucket($bucketName);
+            if (!$visitaRaw) {
+                abort(404, 'Visita no encontrada o sin permisos para verla.');
+            }
 
-        // Extraer todas las URLs de imágenes con URLs firmadas
-        $imagenes = [];
-        $areasMapping = [
-            'IMG_OBS_OPE' => [
-                'titulo' => 'Operaciones', 
-                'observaciones' => $visitaRaw['OBS_01_01'] ?? null
-            ],
-            'IMG_OBS_ADM' => [
-                'titulo' => 'Administración', 
-                'observaciones' => $visitaRaw['OBS_02_01'] ?? null
-            ],
-            'IMG_OBS_PRO' => [
-                'titulo' => 'Producto', 
-                'observaciones' => $visitaRaw['OBS_03_01'] ?? null
-            ],
-            'IMG_OBS_PER' => [
-                'titulo' => 'Personal', 
-                'observaciones' => $visitaRaw['OBS_04_01'] ?? null
-            ],
-            'IMG_OBS_KPI' => [
-                'titulo' => 'KPIs', 
-                'observaciones' => $visitaRaw['OBS_05_01'] ?? null
-            ],
-        ];
+            if (!$this->validarAccesoPais($visitaRaw, $user)) {
+                abort(403, 'No tiene permisos para ver imágenes de visitas de este país.');
+            }
 
-        foreach ($areasMapping as $columna => $info) {
-            if (!empty($visitaRaw[$columna])) {
-                try {
-                    // Extraer el nombre del archivo de la URL completa
-                    $urlOriginal = $visitaRaw[$columna];
-                    $fileName = basename(parse_url($urlOriginal, PHP_URL_PATH));
-                    
-                    // Log para debugging
-                    if (config('app.debug')) {
-                        Log::info("Procesando imagen: $columna");
-                        Log::info("URL Original: $urlOriginal");
-                        Log::info("Nombre archivo: $fileName");
-                    }
-                    
-                    // Generar URL firmada válida por 2 horas
-                    $object = $bucket->object('observaciones/' . $fileName);
-                    
-                    // Verificar si el objeto existe
-                    if ($object->exists()) {
-                        $signedUrl = $object->signedUrl(new \DateTime('+2 hours'));
-                        if (config('app.debug')) {
-                            Log::info("URL Firmada generada: $signedUrl");
-                        }
-                        
-                        $imagenes[] = [
-                            'area' => $columna,
-                            'titulo' => $info['titulo'],
-                            'url' => $signedUrl,
-                            'url_original' => $urlOriginal,
-                            'observaciones' => $info['observaciones'],
-                            'existe' => true
-                        ];
-                    } else {
-                        if (config('app.debug')) {
-                            Log::warning("Archivo no encontrado en bucket: observaciones/$fileName");
-                        }
-                        
-                        // Intentar sin la carpeta observaciones
-                        $objectDirect = $bucket->object($fileName);
-                        if ($objectDirect->exists()) {
-                            $signedUrl = $objectDirect->signedUrl(new \DateTime('+2 hours'));
-                            if (config('app.debug')) {
-                                Log::info("URL Firmada (directa) generada: $signedUrl");
+            // Cargar textos de preguntas para mostrar descripciones completas
+            $estructura = $this->getTextosPreguntas();
+            $textosPreguntasPlanos = collect($estructura)->flatMap(fn($seccion) => $seccion);
+
+            // Inicializar Google Cloud Storage
+            $storage = new StorageClient([
+                'projectId' => env('BIGQUERY_PROJECT_ID', 'adoc-bi-dev'),
+                'keyFilePath' => storage_path('app' . env('BIGQUERY_KEY_FILE', '/claves/adoc-bi-dev-debcb06854ae.json'))
+            ]);
+            $bucketName = env('GOOGLE_CLOUD_STORAGE_BUCKET', 'adoc-bi-dev-control-visitas-lz');
+            $bucket = $storage->bucket($bucketName);
+
+            $imagenesAgrupadas = [];
+
+            foreach ($visitaRaw['secciones'] as $seccion) {
+                $nombreSeccion = $seccion['nombre_seccion'] ?? 'Sin Nombre';
+                $codigoSeccion = $seccion['codigo_seccion'] ?? null;
+
+                $bloque = [
+                    'nombre_seccion' => ucfirst($nombreSeccion),
+                    'codigo_seccion' => $codigoSeccion,
+                    'preguntas' => []
+                ];
+
+                foreach ($seccion['preguntas'] as $pregunta) {
+                    $codigo = $pregunta['codigo_pregunta'];
+                    $observaciones = $pregunta['observaciones'] ?? null;
+                    $urls = $pregunta['imagenes'] ?? [];
+
+                    $imagenes = [];
+
+                    foreach ($urls as $urlOriginal) {
+                        try {
+                            $fileName = basename(parse_url($urlOriginal, PHP_URL_PATH));
+                            $object = $bucket->object('observaciones/' . $fileName);
+
+                            if ($object->exists()) {
+                                $signedUrl = $object->signedUrl(new \DateTime('+2 hours'));
+                            } else {
+                                $objectAlt = $bucket->object($fileName);
+                                $signedUrl = $objectAlt->exists() ? $objectAlt->signedUrl(new \DateTime('+2 hours')) : $urlOriginal;
                             }
-                            
+
                             $imagenes[] = [
-                                'area' => $columna,
-                                'titulo' => $info['titulo'],
                                 'url' => $signedUrl,
-                                'url_original' => $urlOriginal,
-                                'observaciones' => $info['observaciones'],
-                                'existe' => true
+                                'url_original' => $urlOriginal
                             ];
-                        } else {
-                            // Si no existe, usar URL original como fallback
+                        } catch (\Exception $e) {
+                            Log::error("Error generando URL firmada: " . $e->getMessage());
                             $imagenes[] = [
-                                'area' => $columna,
-                                'titulo' => $info['titulo'],
                                 'url' => $urlOriginal,
-                                'url_original' => $urlOriginal,
-                                'observaciones' => $info['observaciones'],
-                                'existe' => false
+                                'url_original' => $urlOriginal
                             ];
                         }
                     }
-                    
-                } catch (\Exception $e) {
-                    Log::error("Error generando URL firmada para $columna: " . $e->getMessage());
-                    
-                    // Si falla todo, usar la URL original
-                    $imagenes[] = [
-                        'area' => $columna,
-                        'titulo' => $info['titulo'],
-                        'url' => $visitaRaw[$columna],
-                        'url_original' => $visitaRaw[$columna],
-                        'observaciones' => $info['observaciones'],
-                        'existe' => false,
-                        'error' => $e->getMessage()
+
+                    $bloque['preguntas'][] = [
+                        'codigo_pregunta' => $codigo,
+                        'texto_pregunta' => $textosPreguntasPlanos[$codigo] ?? $codigo,
+                        'observaciones' => $observaciones,
+                        'imagenes' => $imagenes
                     ];
                 }
+
+                $imagenesAgrupadas[] = $bloque;
             }
+
+            // Información básica de la visita
+            $infoVisita = [
+                'id' => $visitaRaw['id'],
+                'tienda' => $visitaRaw['tienda'] ?? 'N/A',
+                'pais' => $visitaRaw['pais'] ?? 'N/A',
+                'zona' => $visitaRaw['zona'] ?? 'N/A',
+                'fecha' => $visitaRaw['fecha_hora_inicio'],
+                'evaluador' => $visitaRaw['lider_zona'] ?? $visitaRaw['correo_realizo']
+            ];
+
+            return view('admin.visitas.imagenes', [
+                'infoVisita' => $infoVisita ?? [],
+                'imagenes' => collect($imagenesAgrupadas)->flatMap(fn($b) => collect($b['preguntas'])->flatMap(fn($p) => $p['imagenes'] ?? [])),
+                'imagenesAgrupadas' => collect($imagenesAgrupadas),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al mostrar imágenes: ' . $e->getMessage());
+            return redirect()->route('admin.dashboard')
+                ->with('error', 'Error al cargar las imágenes de la visita: ' . $e->getMessage());
         }
-
-        // Información básica de la visita
-        $infoVisita = [
-            'id' => $visitaRaw['id'],
-            'tienda' => $visitaRaw['TIENDA'] ?? 'N/A',
-            'pais' => $visitaRaw['PAIS'] ?? 'N/A',
-            'zona' => $visitaRaw['ZONA'] ?? 'N/A',
-            'fecha' => $visitaRaw['FECHA_HORA_INICIO'],
-            'evaluador' => $visitaRaw['LIDER_ZONA'] ?? $visitaRaw['CORREO_REALIZO']
-        ];
-
-        if (config('app.debug')) {
-            Log::info("Total de imágenes procesadas: " . count($imagenes));
-        }
-
-        return view('admin.visitas.imagenes', compact('imagenes', 'infoVisita'));
-
-    } catch (\Exception $e) {
-        Log::error('Error al mostrar imágenes: ' . $e->getMessage());
-        Log::error('Stack trace: ' . $e->getTraceAsString());
-        
-        return redirect()->route('admin.dashboard')
-            ->with('error', 'Error al cargar las imágenes de la visita: ' . $e->getMessage());
     }
-}
-
 
     /**
      * API para obtener datos de visita (AJAX)
@@ -251,7 +193,7 @@ public function imagenes($id)
     {
         try {
             $user = session('admin_user');
-            
+
             $visitaRaw = $this->usuario->getVisitaCompleta(
                 $id,
                 $user['rol'],
@@ -264,13 +206,13 @@ public function imagenes($id)
                     'error' => 'Visita no encontrada'
                 ], 404);
             }
-            
+
             // AGREGAR ESTA VALIDACI�0�7N:
             // Validar acceso por pa��s
             if (!$this->validarAccesoPais($visitaRaw, $user)) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'Sin acceso a visitas de este pa��s'
+                    'error' => 'Sin acceso a visitas de este país'
                 ], 403);
             }
 
@@ -279,21 +221,20 @@ public function imagenes($id)
 
             // �9�9 AGREGAR VALIDACI�0�7N DE DISTANCIA PARA API
             $validacionDistancia = $this->usuario->getValidacionDistancia(
-                $id, 
-                $user['rol'], 
+                $id,
+                $user['rol'],
                 $user['email']
             );
 
-return response()->json([
-    'success' => true,
-    'data' => $visita,
-    'puntuaciones' => $puntuaciones,
-    'validacion_distancia' => $validacionDistancia
-]);
-
+            return response()->json([
+                'success' => true,
+                'data' => $visita,
+                'puntuaciones' => $puntuaciones,
+                'validacion_distancia' => $validacionDistancia
+            ]);
         } catch (\Exception $e) {
             Log::error('Error en getVisitaData API: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'error' => 'Error interno del servidor'
@@ -306,7 +247,7 @@ return response()->json([
      */
     private function getTextosPreguntas()
     {
-        return [
+        $estructura = [
             'operaciones' => [
                 'PREG_01_01' => 'Pintura de tienda en buen estado. Interior/Exterior.',
                 'PREG_01_02' => 'Vitrinas de tiendas limpias, con iluminación y acrílicos en buen estado.',
@@ -322,6 +263,14 @@ return response()->json([
                 'PREG_01_12' => 'Área de comida limpia y articulos personales ordenados en su área.',
                 'PREG_01_13' => 'Baño limpio y ordenado',
                 'PREG_01_14' => 'La tienda cuenta con suficientes sillas o bancos en buen estado (limpios y lavados) para que los clientes se prueben los zapatos (según planograma o layout). NOTA: Si los sillones están sucios deben mandarse a lavar.',
+                'PREG_01_15' => 'Las cajas alzadoras de zapatos se usan en las exhibiciones.',
+                'PREG_01_16' => 'No se usa cinta adhesiva (tape) en ningun lugar de la tienda.',
+                'PREG_01_17' => 'No hay muebles dañados, rotos o qubrados en la tienda.',
+                'PREG_01_18' => 'El area de caja está ordenada y conforme a los estándares autorizados y en servicio.',
+                'PREG_01_19' => 'Se ofrecen accesorios a los clientes en cada visita o compra.',
+                'PREG_01_20' => 'Todas las luces de los muebles de pared y mesa son funcionales y emiten una luz amarilla intensa (3500-4000 lúmenes).',
+                'PREG_01_21' => 'Las pantallas de la vitrina estan posicionadas a 90 grados (de forma vertical).',
+                'PREG_01_22' => 'Los azulejos, la fórmica y el piso no están dañados en ningún lugar de la tienda.',
             ],
             'administracion' => [
                 'PREG_02_01' => 'Cuenta de orden al día.',
@@ -330,7 +279,6 @@ return response()->json([
                 'PREG_02_04' => 'Libro de cuadre de efectivo y caja chica al día',
                 'PREG_02_05' => 'Libro de horarios al día y firmados por los empleados',
                 'PREG_02_06' => 'Conteo efectuados según lineamientos establecidos.',
-                'PREG_02_07' => 'Pizarras y folders Friedman actualizados.',
                 'PREG_02_08' => 'Files actualizados.',
             ],
             'producto' => [
@@ -338,15 +286,14 @@ return response()->json([
                 'PREG_03_02' => 'Artículos exhibidos con su etiqueta y precio correcto. Nota: Si un zapato llega dañado de fábrica reportarlo de inmediato y retírelo del piso de venta.',
                 'PREG_03_03' => 'Cambios de precio realizado, firmado y archivado. Nota: Es prohibido colocar otro precio que no sea el oficial.',
                 'PREG_03_04' => 'Promociones actualizadas y compartidas con todo el personal.',
-                'PREG_03_05' => 'Reporte 80/20 revisado semanalmente.',
                 'PREG_03_06' => 'Implementación de planogramas(Producto, POP, Manuales).',
                 'PREG_03_07' => 'En las exhibiciones están todos los estilos disponibles en la tienda representados por talla (sin ningún zapato dañado o sucio).',
                 'PREG_03_08' => 'Todas las sandalias en exhibidores y/o mesas usan modeladores acrílicos.',
+                'PREG_03_09' => 'Todas las sandalias y zapatos abiertos tienen un acrílico.',
+                'PREG_03_10' => 'Todas las carteras tienen un alzador en las exhibiciones.',
             ],
             'personal' => [
-                'PREG_04_01' => 'Cumplimiento de las marcaciones (4 por día).',
                 'PREG_04_02' => 'Personal con imagen presentable, con su respectivo uniforme según política.',
-                'PREG_04_03' => 'Personal cumple los 5 estándares NO negociables.',
                 'PREG_04_04' => 'Amabilidad en el recibimiento de los clientes.',
                 'PREG_04_05' => 'Cumplimiento de protocolos de bioseguridad.',
                 'PREG_04_06' => 'Disponibilidad del personal para ayudar durante el recorrido, selección y prueba de calzado.',
@@ -369,52 +316,62 @@ return response()->json([
                 'PREG_05_06' => 'NPS',
             ]
         ];
+        // Aplanar si necesitás acceder por código directamente sin saber la sección
+        $textosPlanos = [];
+
+        foreach ($estructura as $seccion => $preguntas) {
+            foreach ($preguntas as $codigo => $texto) {
+                $textosPlanos[$codigo] = $texto;
+            }
+        }
+
+        return $estructura;
     }
-    
+
     /**
- * Validar si el usuario tiene acceso a visitas del pa��s de la visita
- */
-private function validarAccesoPais($visitaData, $userData)
-{
-    // Admin y evaluador normal tienen acceso completo
-    if (in_array($userData['rol'], ['admin', 'evaluador'])) {
-        return true;
-    }
-    
-    // Para evaluador_pais, verificar pa��s espec��fico
-    if ($userData['rol'] === 'evaluador_pais') {
-        $paisVisita = $visitaData['PAIS'] ?? null;
-        $paisPermitido = $userData['pais_acceso'] ?? null;
-        
-        // Log del intento de acceso para auditor��a
-        Log::info('Validaci��n acceso por pa��s', [
-            'usuario' => $userData['email'],
-            'rol' => $userData['rol'],
-            'pais_visita' => $paisVisita,
-            'pais_permitido' => $paisPermitido,
-            'visita_id' => $visitaData['id'] ?? 'N/A'
-        ]);
-        
-        // Verificar acceso
-        if ($paisPermitido === 'ALL') {
+     * Validar si el usuario tiene acceso a visitas del pa��s de la visita
+     */
+    private function validarAccesoPais($visitaData, $userData)
+    {
+        // Admin y evaluador normal tienen acceso completo
+        if (in_array($userData['rol'], ['admin', 'evaluador'])) {
             return true;
         }
-        
-        if ($paisPermitido === $paisVisita) {
-            return true;
+
+        // Para evaluador_pais, verificar pa��s espec��fico
+        if ($userData['rol'] === 'evaluador_pais') {
+            $paisVisita = $visitaData['pais'] ?? null;
+            $paisPermitido = $userData['pais_acceso'] ?? null;
+
+            // Log del intento de acceso para auditor��a
+            Log::info('Validación acceso por país', [
+                'usuario' => $userData['email'],
+                'rol' => $userData['rol'],
+                'pais_visita' => $paisVisita,
+                'pais_permitido' => $paisPermitido,
+                'visita_id' => $visitaData['id'] ?? 'N/A'
+            ]);
+
+            // Verificar acceso
+            if ($paisPermitido === 'ALL') {
+                return true;
+            }
+
+            if ($paisPermitido === $paisVisita) {
+                return true;
+            }
+
+            // Log de acceso denegado
+            Log::warning('Acceso denegado por país', [
+                'usuario' => $userData['email'],
+                'pais_solicitado' => $paisVisita,
+                'pais_permitido' => $paisPermitido,
+                'visita_id' => $visitaData['id'] ?? 'N/A'
+            ]);
+
+            return false;
         }
-        
-        // Log de acceso denegado
-        Log::warning('Acceso denegado por pa��s', [
-            'usuario' => $userData['email'],
-            'pais_solicitado' => $paisVisita,
-            'pais_permitido' => $paisPermitido,
-            'visita_id' => $visitaData['id'] ?? 'N/A'
-        ]);
-        
+
         return false;
     }
-    
-    return false;
-}
 }

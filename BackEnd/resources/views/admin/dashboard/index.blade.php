@@ -225,19 +225,19 @@
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div>
                                 <div class="text-sm font-medium text-gray-900">
-                                    {{ $visita['TIENDA'] ?? 'N/A' }}
+                                    {{ $visita['tienda'] ?? 'N/A' }}
                                 </div>
                                 <div class="text-sm text-gray-500">
-                                    {{ $visita['LIDER_ZONA'] ?? $visita['CORREO_REALIZO'] }}
+                                    {{ $visita['lider_zona'] ?? $visita['correo_realizo'] }}
                                 </div>
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm text-gray-900">{{ $visita['PAIS'] ?? 'N/A' }}</div>
-                            <div class="text-sm text-gray-500">{{ $visita['ZONA'] ?? 'N/A' }}</div>
+                            <div class="text-sm text-gray-900">{{ $visita['pais'] ?? 'N/A' }}</div>
+                            <div class="text-sm text-gray-500">{{ $visita['zona'] ?? 'N/A' }}</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {{ \Carbon\Carbon::parse($visita['FECHA_HORA_INICIO'])->format('d/m/Y H:i') }}
+                            {{ \Carbon\Carbon::parse($visita['fecha_hora_inicio'])->format('d/m/Y H:i') }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             @if(isset($visita['puntuacion_general']) && $visita['puntuacion_general'])

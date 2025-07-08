@@ -121,7 +121,7 @@ class Usuario
     public function create($data)
     {
         $table = $this->bigQuery->dataset($this->dataset)->table($this->table);
-        
+
         $row = [
             'data' => [
                 'id' => uniqid('user_', true),
@@ -136,56 +136,56 @@ class Usuario
         ];
 
         $insertResponse = $table->insertRows([$row]);
-        
+
         return $insertResponse->isSuccessful();
     }
-/**
+    /**
      * Obtener estadísticas generales de visitas
      */
     public function getEstadisticasVisitas($filtros = [], $userData = null)
-{
-    // Si no se pasa userData, obtenerlo de la sesión
-    if (!$userData) {
-        $userData = session('admin_user');
-    }
-    
-    $params = [];
-    $whereClause = $this->buildWhereClause($filtros, $userData, $params);
-    
-    $query = sprintf(
-        'SELECT 
+    {
+        // Si no se pasa userData, obtenerlo de la sesión
+        if (!$userData) {
+            $userData = session('admin_user');
+        }
+
+        $params = [];
+        $whereClause = $this->buildWhereClause($filtros, $userData, $params);
+
+        $query = sprintf(
+            'SELECT 
             COUNT(*) as total_visitas,
-            COUNT(DISTINCT PAIS) as total_paises,
-            COUNT(DISTINCT ZONA) as total_zonas,
-            COUNT(DISTINCT TIENDA) as total_tiendas,
-            COUNT(DISTINCT CORREO_REALIZO) as total_evaluadores,
-            DATE(MIN(FECHA_HORA_INICIO)) as fecha_primera_visita,
-            DATE(MAX(FECHA_HORA_INICIO)) as fecha_ultima_visita
+            COUNT(DISTINCT pais) as total_paises,
+            COUNT(DISTINCT zona) as total_zonas,
+            COUNT(DISTINCT tienda) as total_tiendas,
+            COUNT(DISTINCT correo_realizo) as total_evaluadores,
+            DATE(MIN(fecha_hora_inicio)) as fecha_primera_visita,
+            DATE(MAX(fecha_hora_fin)) as fecha_ultima_visita
         FROM `%s.%s.%s` %s',
-        $this->projectId,
-        $this->dataset,
-        $this->visitasTable,
-        $whereClause
-    );
-    
-    $queryJobConfig = $this->bigQuery->query($query)
-        ->parameters($params);
-    $results = $this->bigQuery->runQuery($queryJobConfig);
-    
-    foreach ($results->rows() as $row) {
-        return (array) $row;
-    }
-    
+            $this->projectId,
+            $this->dataset,
+            $this->visitasTable,
+            $whereClause
+        );
+
+        $queryJobConfig = $this->bigQuery->query($query)
+            ->parameters($params);
+        $results = $this->bigQuery->runQuery($queryJobConfig);
+
+        foreach ($results->rows() as $row) {
+            return (array) $row;
+        }
+
         return [
             'total_visitas' => 0,
-        'total_paises' => 0,
-        'total_zonas' => 0,
-        'total_tiendas' => 0,
-        'total_evaluadores' => 0,
-        'fecha_primera_visita' => null,
-        'fecha_ultima_visita' => null
-    ];
-}
+            'total_paises' => 0,
+            'total_zonas' => 0,
+            'total_tiendas' => 0,
+            'total_evaluadores' => 0,
+            'fecha_primera_visita' => null,
+            'fecha_ultima_visita' => null
+        ];
+    }
 
 
     /**
@@ -194,31 +194,68 @@ class Usuario
     public function getVisitasPaginadas($filtros = [], $page = 1, $perPage = 20, $userData = null)
     {
         $params = [];
-        $whereClause = $this->buildWhereClause($filtros, $userData, $params); // ✅ Pasar userData
+        $whereClause = $this->buildWhereClause($filtros, $userData, $params);
         $offset = ($page - 1) * $perPage;
-        
+
         $query = sprintf(
             'SELECT 
-                id,
-                FECHA_HORA_INICIO,
-                CORREO_REALIZO,
-                LIDER_ZONA,
-                PAIS,
-                ZONA,
-                TIENDA,
-                UBICACION,
-                -- Calcular puntuación promedio de operaciones
-                (CAST(PREG_01_01 AS FLOAT64) + CAST(PREG_01_02 AS FLOAT64) + CAST(PREG_01_03 AS FLOAT64) + 
-                 CAST(PREG_01_04 AS FLOAT64) + CAST(PREG_01_05 AS FLOAT64)) / 5 as puntuacion_operaciones,
-                -- Calcular puntuación promedio general (ejemplo con primeras 10 preguntas)
-                (CAST(PREG_01_01 AS FLOAT64) + CAST(PREG_01_02 AS FLOAT64) + CAST(PREG_01_03 AS FLOAT64) + 
-                 CAST(PREG_01_04 AS FLOAT64) + CAST(PREG_01_05 AS FLOAT64) + CAST(PREG_01_06 AS FLOAT64) + 
-                 CAST(PREG_01_07 AS FLOAT64) + CAST(PREG_01_08 AS FLOAT64) + CAST(PREG_01_09 AS FLOAT64) + 
-                 CAST(PREG_01_10 AS FLOAT64)) / 10 as puntuacion_general
-            FROM `%s.%s.%s`
-            %s
-            ORDER BY FECHA_HORA_INICIO DESC
-            LIMIT %d OFFSET %d',
+            v.id,
+            v.fecha_hora_inicio,
+            v.correo_realizo,
+            v.lider_zona,
+            v.pais,
+            v.zona,
+            v.tienda,
+            v.ubicacion,
+
+            -- Promedio general de todas las respuestas numéricas
+            (
+              SELECT AVG(CAST(p.respuesta AS FLOAT64))
+              FROM UNNEST(v.secciones) AS s,
+                   UNNEST(s.preguntas) AS p
+              WHERE SAFE_CAST(p.respuesta AS FLOAT64) IS NOT NULL
+            ) AS puntuacion_general,
+
+            -- Promedio por sección específica
+            (
+              SELECT AVG(CAST(p.respuesta AS FLOAT64))
+              FROM UNNEST(v.secciones) AS s,
+                   UNNEST(s.preguntas) AS p
+              WHERE s.nombre_seccion = "Operaciones" AND SAFE_CAST(p.respuesta AS FLOAT64) IS NOT NULL
+            ) AS puntuacion_operaciones,
+
+            (
+              SELECT AVG(CAST(p.respuesta AS FLOAT64))
+              FROM UNNEST(v.secciones) AS s,
+                   UNNEST(s.preguntas) AS p
+              WHERE s.nombre_seccion = "Administración" AND SAFE_CAST(p.respuesta AS FLOAT64) IS NOT NULL
+            ) AS puntuacion_administracion,
+
+            (
+              SELECT AVG(CAST(p.respuesta AS FLOAT64))
+              FROM UNNEST(v.secciones) AS s,
+                   UNNEST(s.preguntas) AS p
+              WHERE s.nombre_seccion = "Producto" AND SAFE_CAST(p.respuesta AS FLOAT64) IS NOT NULL
+            ) AS puntuacion_producto,
+
+            (
+              SELECT AVG(CAST(p.respuesta AS FLOAT64))
+              FROM UNNEST(v.secciones) AS s,
+                   UNNEST(s.preguntas) AS p
+              WHERE s.nombre_seccion = "Personal" AND SAFE_CAST(p.respuesta AS FLOAT64) IS NOT NULL
+            ) AS puntuacion_personal,
+
+            (
+              SELECT AVG(CAST(p.respuesta AS FLOAT64))
+              FROM UNNEST(v.secciones) AS s,
+                   UNNEST(s.preguntas) AS p
+              WHERE s.nombre_seccion = "KPIs" AND SAFE_CAST(p.respuesta AS FLOAT64) IS NOT NULL
+            ) AS puntuacion_kpis
+
+        FROM `%s.%s.%s` v
+        %s
+        ORDER BY v.fecha_hora_inicio DESC
+        LIMIT %d OFFSET %d',
             $this->projectId,
             $this->dataset,
             $this->visitasTable,
@@ -246,7 +283,7 @@ class Usuario
     public function getPaisesDisponibles($userData = null)
     {
         $query = sprintf(
-            'SELECT DISTINCT PAIS FROM `%s.%s.%s` WHERE PAIS IS NOT NULL',
+            'SELECT DISTINCT pais FROM `%s.%s.%s` WHERE pais IS NOT NULL',
             $this->projectId,
             $this->dataset,
             $this->visitasTable
@@ -258,21 +295,21 @@ class Usuario
             $userData && $userData['rol'] === 'evaluador_pais' &&
             isset($userData['pais_acceso']) && $userData['pais_acceso'] !== 'ALL'
         ) {
-            $query .= ' AND PAIS = @pais_acceso';
+            $query .= ' AND pais = @pais_acceso';
             $params['pais_acceso'] = $this->sanitize($userData['pais_acceso']);
         }
 
-        $query .= ' ORDER BY PAIS';
+        $query .= ' ORDER BY pais';
 
         $queryJobConfig = $this->bigQuery->query($query)
             ->parameters($params);
         $results = $this->bigQuery->runQuery($queryJobConfig);
-    
+
         $paises = [];
         foreach ($results->rows() as $row) {
-            $paises[] = $row['PAIS'];
+            $paises[] = $row['pais'];
         }
-    
+
         return $paises;
     }
 
@@ -282,10 +319,10 @@ class Usuario
     public function getEvaluadoresDisponibles()
     {
         $query = sprintf(
-            'SELECT DISTINCT CORREO_REALIZO, LIDER_ZONA
+            'SELECT DISTINCT correo_realizo, lider_zona
             FROM `%s.%s.%s`
-            WHERE CORREO_REALIZO IS NOT NULL
-            ORDER BY CORREO_REALIZO',
+            WHERE correo_realizo IS NOT NULL
+            ORDER BY correo_realizo',
             $this->projectId,
             $this->dataset,
             $this->visitasTable
@@ -297,8 +334,8 @@ class Usuario
         $evaluadores = [];
         foreach ($results->rows() as $row) {
             $evaluadores[] = [
-                'email' => $row['CORREO_REALIZO'],
-                'nombre' => $row['LIDER_ZONA'] ?? $row['CORREO_REALIZO']
+                'email' => $row['correo_realizo'],
+                'nombre' => $row['lider_zona'] ?? $row['correo_realizo']
             ];
         }
 
@@ -318,7 +355,7 @@ class Usuario
 
         // Filtro por rol de usuario
         if ($userData && $userData['rol'] === 'evaluador') {
-            $conditions[] = 'CORREO_REALIZO = @evaluador_email';
+            $conditions[] = 'correo_realizo = @evaluador_email';
             $params['evaluador_email'] = $this->sanitize($userData['email']);
         }
 
@@ -329,29 +366,29 @@ class Usuario
             isset($userData['pais_acceso']) &&
             $userData['pais_acceso'] !== 'ALL'
         ) {
-            $conditions[] = 'PAIS = @pais_acceso';
+            $conditions[] = 'pais = @pais_acceso';
             $params['pais_acceso'] = $this->sanitize($userData['pais_acceso']);
         }
 
         // Filtros manuales
         if (!empty($filtros['fecha_inicio']) && $this->validarFecha($filtros['fecha_inicio'])) {
-            $conditions[] = 'DATE(FECHA_HORA_INICIO) >= @fecha_inicio';
+            $conditions[] = 'DATE(fecha_hora_inicio) >= @fecha_inicio';
             $params['fecha_inicio'] = $filtros['fecha_inicio'];
         }
         if (!empty($filtros['fecha_fin']) && $this->validarFecha($filtros['fecha_fin'])) {
-            $conditions[] = 'DATE(FECHA_HORA_INICIO) <= @fecha_fin';
+            $conditions[] = 'DATE(fecha_hora_inicio) <= @fecha_fin';
             $params['fecha_fin'] = $filtros['fecha_fin'];
         }
         if (!empty($filtros['pais'])) {
-            $conditions[] = 'PAIS = @pais';
+            $conditions[] = 'pais = @pais';
             $params['pais'] = $this->sanitize($filtros['pais']);
         }
         if (!empty($filtros['tienda'])) {
-            $conditions[] = 'TIENDA LIKE @tienda';
+            $conditions[] = 'tienda LIKE @tienda';
             $params['tienda'] = '%' . $this->sanitize($filtros['tienda']) . '%';
         }
         if (!empty($filtros['evaluador'])) {
-            $conditions[] = 'CORREO_REALIZO = @evaluador';
+            $conditions[] = 'correo_realizo = @evaluador';
             $params['evaluador'] = $this->sanitize($filtros['evaluador']);
         }
 
@@ -377,11 +414,11 @@ class Usuario
     /**
      * Contar total de visitas con filtros
      */
-public function contarVisitas($filtros = [], $userData = null)
-{
-    $params = [];
-    $whereClause = $this->buildWhereClause($filtros, $userData, $params); // ✅ Pasar userData
-        
+    public function contarVisitas($filtros = [], $userData = null)
+    {
+        $params = [];
+        $whereClause = $this->buildWhereClause($filtros, $userData, $params); // ✅ Pasar userData
+
         $query = sprintf(
             'SELECT COUNT(*) as total FROM `%s.%s.%s` %s',
             $this->projectId,
@@ -401,29 +438,29 @@ public function contarVisitas($filtros = [], $userData = null)
         return 0;
     }
 
-/**
+    /**
      * Obtener detalle completo de una visita por ID
      */
     public function getVisitaCompleta($id, $userRole = null, $userEmail = null)
     {
         // Construir query base
-$query = sprintf(
-    'SELECT concat(gr.PAIS,left(gr.TIENDA,3)) BV_PAIS_TIENDA, a.GEO as TIENDA_COORDENADAS, gr.*
+        $query = sprintf(
+            'SELECT concat(gr.pais,left(gr.tienda,3)) BV_PAIS_TIENDA, a.GEO as TIENDA_COORDENADAS, gr.*
     FROM `%s.%s.%s` gr
     LEFT JOIN (
         SELECT concat(dsm.LATITUD,",",replace(dsm.LONGITUD,"\'","")) GEO, dsm.PAIS_TIENDA
         FROM `%s.bi_lab.dim_store_master` dsm
         WHERE dsm.LATITUD NOT IN ("nan")
-    ) a ON concat(gr.PAIS,left(gr.TIENDA,3)) = a.PAIS_TIENDA
+    ) a ON concat(gr.pais,left(gr.tienda,3)) = a.PAIS_TIENDA
     WHERE gr.id = @id',
-    $this->projectId,
-    $this->dataset,
-    $this->visitasTable,
-    $this->projectId
-);
+            $this->projectId,
+            $this->dataset,
+            $this->visitasTable,
+            $this->projectId
+        );
         // Si es evaluador, verificar que solo vea sus visitas
         if ($userRole === 'evaluador' && $userEmail) {
-            $query .= ' AND CORREO_REALIZO = @user_email';
+            $query .= ' AND correo_realizo = @user_email';
         }
 
         $query .= ' LIMIT 1';
@@ -450,192 +487,87 @@ $query = sprintf(
     public function getImagenesVisita($id, $userRole = null, $userEmail = null)
     {
         $visita = $this->getVisitaCompleta($id, $userRole, $userEmail);
-        
-        if (!$visita) {
+
+        if (!$visita || !isset($visita['secciones'])) {
             return [];
         }
 
         $imagenes = [];
-        
-        // Mapear imágenes por área
-        $areasImagenes = [
-            'operaciones' => [
-                'titulo' => 'Operaciones',
-                'url' => $visita['IMG_OBS_OPE_URL'] ?? null,
-                'observaciones' => $visita['OBS_01_01'] ?? null
-            ],
-            'administracion' => [
-                'titulo' => 'Administración',
-                'url' => $visita['IMG_OBS_ADM_URL'] ?? null,
-                'observaciones' => $visita['OBS_02_01'] ?? null
-            ],
-            'producto' => [
-                'titulo' => 'Producto',
-                'url' => $visita['IMG_OBS_PRO_URL'] ?? null,
-                'observaciones' => $visita['OBS_03_01'] ?? null
-            ],
-            'personal' => [
-                'titulo' => 'Personal',
-                'url' => $visita['IMG_OBS_PER_URL'] ?? null,
-                'observaciones' => $visita['OBS_04_01'] ?? null
-            ],
-            'kpis' => [
-                'titulo' => 'KPIs',
-                'url' => $visita['IMG_OBS_KPI_URL'] ?? null,
-                'observaciones' => $visita['OBS_05_01'] ?? null
-            ]
-        ];
 
-        // Filtrar solo las imágenes que existen
-        foreach ($areasImagenes as $area => $data) {
-            if (!empty($data['url'])) {
-                $imagenes[$area] = $data;
+        foreach ($visita['secciones'] as $seccion) {
+            $nombre = $seccion['nombre_seccion'] ?? 'Sin sección';
+
+            $imagenes[$nombre] = [
+                'titulo' => $nombre,
+                'imagenes' => [],
+            ];
+
+            foreach ($seccion['preguntas'] as $pregunta) {
+                if (!empty($pregunta['imagenes'])) {
+                    $imagenes[$nombre]['imagenes'][] = [
+                        'codigo_pregunta' => $pregunta['codigo_pregunta'],
+                        'urls' => $pregunta['imagenes']
+                    ];
+                }
+            }
+
+            // Eliminar si no hay imágenes
+            if (empty($imagenes[$nombre]['imagenes'])) {
+                unset($imagenes[$nombre]);
             }
         }
 
         return $imagenes;
     }
 
+
     /**
      * Procesar y estructurar datos de la visita para display
      */
     public function procesarDatosVisita($visita)
     {
-        if (!$visita) {
+        if (!$visita || !isset($visita['secciones'])) {
             return null;
         }
 
-        return [
-            // Información general
+        $resultado = [
             'id' => $visita['id'],
-            'fecha_hora_inicio' => $visita['FECHA_HORA_INICIO'],
-            'fecha_hora_fin' => $visita['FECHA_HORA_FIN'] ?? null,
-            'correo_realizo' => $visita['CORREO_REALIZO'],
-            'lider_zona' => $visita['LIDER_ZONA'],
-            'pais' => $visita['PAIS'],
-            'zona' => $visita['ZONA'],
-            'tienda' => $visita['TIENDA'],
-            'ubicacion' => $visita['UBICACION'],
-
-            // Sección 1: Operaciones (14 preguntas)
-            'operaciones' => [
-                'preguntas' => [
-                    'PREG_01_01' => $visita['PREG_01_01'] ?? null,
-                    'PREG_01_02' => $visita['PREG_01_02'] ?? null,
-                    'PREG_01_03' => $visita['PREG_01_03'] ?? null,
-                    'PREG_01_04' => $visita['PREG_01_04'] ?? null,
-                    'PREG_01_05' => $visita['PREG_01_05'] ?? null,
-                    'PREG_01_06' => $visita['PREG_01_06'] ?? null,
-                    'PREG_01_07' => $visita['PREG_01_07'] ?? null,
-                    'PREG_01_08' => $visita['PREG_01_08'] ?? null,
-                    'PREG_01_09' => $visita['PREG_01_09'] ?? null,
-                    'PREG_01_10' => $visita['PREG_01_10'] ?? null,
-                    'PREG_01_11' => $visita['PREG_01_11'] ?? null,
-                    'PREG_01_12' => $visita['PREG_01_12'] ?? null,
-                    'PREG_01_13' => $visita['PREG_01_13'] ?? null,
-                    'PREG_01_14' => $visita['PREG_01_14'] ?? null,
-                ],
-                'observaciones' => $visita['OBS_01_01'] ?? null,
-                'imagen_url' => $visita['IMG_OBS_OPE_URL'] ?? null,
-            ],
-
-            // Sección 2: Administración (8 preguntas)
-            'administracion' => [
-                'preguntas' => [
-                    'PREG_02_01' => $visita['PREG_02_01'] ?? null,
-                    'PREG_02_02' => $visita['PREG_02_02'] ?? null,
-                    'PREG_02_03' => $visita['PREG_02_03'] ?? null,
-                    'PREG_02_04' => $visita['PREG_02_04'] ?? null,
-                    'PREG_02_05' => $visita['PREG_02_05'] ?? null,
-                    'PREG_02_06' => $visita['PREG_02_06'] ?? null,
-                    'PREG_02_07' => $visita['PREG_02_07'] ?? null,
-                    'PREG_02_08' => $visita['PREG_02_08'] ?? null,
-                ],
-                'observaciones' => $visita['OBS_02_01'] ?? null,
-                'imagen_url' => $visita['IMG_OBS_ADM_URL'] ?? null,
-            ],
-
-            // Sección 3: Producto (8 preguntas)
-            'producto' => [
-                'preguntas' => [
-                    'PREG_03_01' => $visita['PREG_03_01'] ?? null,
-                    'PREG_03_02' => $visita['PREG_03_02'] ?? null,
-                    'PREG_03_03' => $visita['PREG_03_03'] ?? null,
-                    'PREG_03_04' => $visita['PREG_03_04'] ?? null,
-                    'PREG_03_05' => $visita['PREG_03_05'] ?? null,
-                    'PREG_03_06' => $visita['PREG_03_06'] ?? null,
-                    'PREG_03_07' => $visita['PREG_03_07'] ?? null,
-                    'PREG_03_08' => $visita['PREG_03_08'] ?? null,
-                ],
-                'observaciones' => $visita['OBS_03_01'] ?? null,
-                'imagen_url' => $visita['IMG_OBS_PRO_URL'] ?? null,
-            ],
-
-            // Sección 4: Personal (15 preguntas)
-            'personal' => [
-                'preguntas' => [
-                    'PREG_04_01' => $visita['PREG_04_01'] ?? null,
-                    'PREG_04_02' => $visita['PREG_04_02'] ?? null,
-                    'PREG_04_03' => $visita['PREG_04_03'] ?? null,
-                    'PREG_04_04' => $visita['PREG_04_04'] ?? null,
-                    'PREG_04_05' => $visita['PREG_04_05'] ?? null,
-                    'PREG_04_06' => $visita['PREG_04_06'] ?? null,
-                    'PREG_04_07' => $visita['PREG_04_07'] ?? null,
-                    'PREG_04_08' => $visita['PREG_04_08'] ?? null,
-                    'PREG_04_09' => $visita['PREG_04_09'] ?? null,
-                    'PREG_04_10' => $visita['PREG_04_10'] ?? null,
-                    'PREG_04_11' => $visita['PREG_04_11'] ?? null,
-                    'PREG_04_12' => $visita['PREG_04_12'] ?? null,
-                    'PREG_04_13' => $visita['PREG_04_13'] ?? null,
-                    'PREG_04_14' => $visita['PREG_04_14'] ?? null,
-                    'PREG_04_15' => $visita['PREG_04_15'] ?? null,
-                ],
-                'observaciones' => $visita['OBS_04_01'] ?? null,
-                'imagen_url' => $visita['IMG_OBS_PER_URL'] ?? null,
-            ],
-
-            // Sección 5: KPIs (6 preguntas)
-            'kpis' => [
-                'preguntas' => [
-                    'PREG_05_01' => $visita['PREG_05_01'] ?? null,
-                    'PREG_05_02' => $visita['PREG_05_02'] ?? null,
-                    'PREG_05_03' => $visita['PREG_05_03'] ?? null,
-                    'PREG_05_04' => $visita['PREG_05_04'] ?? null,
-                    'PREG_05_05' => $visita['PREG_05_05'] ?? null,
-                    'PREG_05_06' => $visita['PREG_05_06'] ?? null,
-                ],
-                'observaciones' => $visita['OBS_05_01'] ?? null,
-                'imagen_url' => $visita['IMG_OBS_KPI_URL'] ?? null,
-            ],
-
-            // Planes de acción
-            'planes_accion' => [
-                'PLAN_01' => [
-                    'descripcion' => $visita['PLAN_01'] ?? null,
-                    'fecha' => $visita['FECHA_PLAN_01'] ?? null,
-                ],
-                'PLAN_02' => [
-                    'descripcion' => $visita['PLAN_02'] ?? null,
-                    'fecha' => $visita['FECHA_PLAN_02'] ?? null,
-                ],
-                'PLAN_03' => [
-                    'descripcion' => $visita['PLAN_03'] ?? null,
-                    'fecha' => $visita['FECHA_PLAN_03'] ?? null,
-                ],
-                'PLAN_04' => [
-                    'descripcion' => $visita['PLAN_04'] ?? null,
-                    'fecha' => $visita['FECHA_PLAN_04'] ?? null,
-                ],
-                'PLAN_05' => [
-                    'descripcion' => $visita['PLAN_05'] ?? null,
-                    'fecha' => $visita['FECHA_PLAN_05'] ?? null,
-                ],
-                'PLAN_ADIC' => [
-                    'descripcion' => $visita['PLAN_ADIC'] ?? null,
-                    'fecha' => $visita['FECHA_PLAN_ADIC'] ?? null,
-                ],
-            ],
+            'fecha_hora_inicio' => $visita['fecha_hora_inicio'],
+            'fecha_hora_fin' => $visita['fecha_hora_fin'] ?? null,
+            'correo_realizo' => $visita['correo_realizo'],
+            'lider_zona' => $visita['lider_zona'],
+            'pais' => $visita['pais'],
+            'zona' => $visita['zona'],
+            'tienda' => $visita['tienda'],
+            'ubicacion' => $visita['ubicacion'],
+            'secciones' => []
         ];
+
+        foreach ($visita['secciones'] as $seccion) {
+            $nombre = $seccion['nombre_seccion'];
+            $preguntas = [];
+
+            foreach ($seccion['preguntas'] as $pregunta) {
+                $preguntas[$pregunta['codigo_pregunta']] = [
+                    'respuesta' => $pregunta['respuesta'],
+                    'imagenes' => $pregunta['imagenes'] ?? [],
+                ];
+            }
+
+            $resultado['secciones'][$nombre] = $preguntas;
+        }
+
+        // Procesar planes
+        if (isset($visita['planes'])) {
+            foreach ($visita['planes'] as $i => $plan) {
+                $resultado['planes_accion'][] = [
+                    'descripcion' => $plan['descripcion'],
+                    'fecha' => $plan['fecha_cumplimiento']
+                ];
+            }
+        }
+
+        return $resultado;
     }
 
     /**
@@ -682,7 +614,7 @@ $query = sprintf(
         // Calcular puntuación general
         $totalSecciones = count($puntuaciones);
         $sumaPromedios = array_sum(array_column($puntuaciones, 'promedio'));
-        
+
         $puntuaciones['general'] = [
             'promedio' => $totalSecciones > 0 ? $sumaPromedios / $totalSecciones : 0,
             'estrellas' => $totalSecciones > 0 ? round(($sumaPromedios / $totalSecciones) * 5, 1) : 0,
@@ -691,23 +623,23 @@ $query = sprintf(
 
         return $puntuaciones;
     }
-    
+
     /**
      * 📍 Calcular distancia entre dos coordenadas usando fórmula Haversine
      */
     public function calcularDistancia($lat1, $lng1, $lat2, $lng2)
     {
         $radioTierra = 6371000; // Radio de la Tierra en metros
-        
+
         $dLat = deg2rad($lat2 - $lat1);
         $dLng = deg2rad($lng2 - $lng1);
-        
-        $a = sin($dLat/2) * sin($dLat/2) +
-             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
-             sin($dLng/2) * sin($dLng/2);
-             
-        $c = 2 * atan2(sqrt($a), sqrt(1-$a));
-        
+
+        $a = sin($dLat / 2) * sin($dLat / 2) +
+            cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+            sin($dLng / 2) * sin($dLng / 2);
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
         return $radioTierra * $c; // Distancia en metros
     }
 
@@ -717,9 +649,9 @@ $query = sprintf(
     public function validarDistanciaVisita($visitaData)
     {
         // Extraer ubicación del usuario desde la visita
-        $ubicacionUsuario = $visitaData['UBICACION'] ?? null;
+        $ubicacionUsuario = $visitaData['ubicacion'] ?? null;
         $coordenadasTienda = $visitaData['TIENDA_COORDENADAS'] ?? null;
-        
+
         if (!$ubicacionUsuario || !$coordenadasTienda) {
             return [
                 'valida' => false,
@@ -728,7 +660,7 @@ $query = sprintf(
                 'estado' => 'sin_datos'
             ];
         }
-        
+
         // Parsear coordenadas del usuario (formato: "lat,lng")
         $coordsUsuario = explode(',', $ubicacionUsuario);
         if (count($coordsUsuario) !== 2) {
@@ -739,7 +671,7 @@ $query = sprintf(
                 'estado' => 'error'
             ];
         }
-        
+
         // Parsear coordenadas de la tienda (formato: "lat,lng")
         $coordsTienda = explode(',', $coordenadasTienda);
         if (count($coordsTienda) !== 2) {
@@ -750,23 +682,23 @@ $query = sprintf(
                 'estado' => 'error'
             ];
         }
-        
+
         $latUsuario = floatval(trim($coordsUsuario[0]));
         $lngUsuario = floatval(trim($coordsUsuario[1]));
         $latTienda = floatval(trim($coordsTienda[0]));
         $lngTienda = floatval(trim($coordsTienda[1]));
-        
+
         // Calcular distancia
         $distancia = $this->calcularDistancia($latUsuario, $lngUsuario, $latTienda, $lngTienda);
         $distanciaRedondeada = round($distancia);
-        
+
         // Determinar validez (≤ 50 metros = válida)
         $esValida = $distanciaRedondeada <= 50;
-        
+
         return [
             'valida' => $esValida,
             'distancia' => $distanciaRedondeada,
-            'mensaje' => $esValida 
+            'mensaje' => $esValida
                 ? "✅ Visita válida: {$distanciaRedondeada} metros de la tienda"
                 : "❌ Visita sospechosa: {$distanciaRedondeada} metros de la tienda (muy lejos)",
             'estado' => $esValida ? 'valida' : 'invalida',
@@ -781,7 +713,7 @@ $query = sprintf(
     public function getValidacionDistancia($id, $userRole = null, $userEmail = null)
     {
         $visitaData = $this->getVisitaCompleta($id, $userRole, $userEmail);
-        
+
         if (!$visitaData) {
             return [
                 'valida' => false,
@@ -790,68 +722,67 @@ $query = sprintf(
                 'estado' => 'error'
             ];
         }
-        
+
         return $this->validarDistanciaVisita($visitaData);
     }
-    
+
     /**
- * Verificar si el usuario tiene acceso a un país específico
- */
-public function tieneAccesoPais($pais, $userData)
-{
-    // Admin siempre tiene acceso completo
-    if ($userData['rol'] === 'admin') {
-        return true;
-    }
-    
-    // Evaluador normal tiene acceso completo
-    if ($userData['rol'] === 'evaluador') {
-        return true;
-    }
-    
-    // Evaluador por país solo accede a su país asignado
-    if ($userData['rol'] === 'evaluador_pais') {
-        $paisAcceso = $userData['pais_acceso'] ?? null;
-        return $paisAcceso === 'ALL' || $paisAcceso === $pais;
-    }
-    
-    return false;
-}
+     * Verificar si el usuario tiene acceso a un país específico
+     */
+    public function tieneAccesoPais($pais, $userData)
+    {
+        // Admin siempre tiene acceso completo
+        if ($userData['rol'] === 'admin') {
+            return true;
+        }
 
-/**
- * Obtener tiendas disponibles según permisos del usuario
- */
-public function getTiendasDisponibles($userData = null)
-{
-    $query = sprintf(
-        'SELECT DISTINCT a.TIENDA FROM `%s.%s.%s` a WHERE a.TIENDA IS NOT NULL',
-        $this->projectId,
-        $this->dataset,
-        $this->visitasTable
-    );
+        // Evaluador normal tiene acceso completo
+        if ($userData['rol'] === 'evaluador') {
+            return true;
+        }
 
-    $params = [];
-    // Si es evaluador_pais, filtrar solo su país
-    if (
-        $userData && $userData['rol'] === 'evaluador_pais' &&
-        isset($userData['pais_acceso']) && $userData['pais_acceso'] !== 'ALL'
-    ) {
-        $query .= ' AND a.PAIS = @pais_acceso';
-        $params['pais_acceso'] = $this->sanitize($userData['pais_acceso']);
+        // Evaluador por país solo accede a su país asignado
+        if ($userData['rol'] === 'evaluador_pais') {
+            $paisAcceso = $userData['pais_acceso'] ?? null;
+            return $paisAcceso === 'ALL' || $paisAcceso === $pais;
+        }
+
+        return false;
     }
 
-    $query .= ' ORDER BY a.TIENDA';
+    /**
+     * Obtener tiendas disponibles según permisos del usuario
+     */
+    public function getTiendasDisponibles($userData = null)
+    {
+        $query = sprintf(
+            'SELECT DISTINCT a.tienda FROM `%s.%s.%s` a WHERE a.tienda IS NOT NULL',
+            $this->projectId,
+            $this->dataset,
+            $this->visitasTable
+        );
 
-    $queryJobConfig = $this->bigQuery->query($query)
-        ->parameters($params);
-    $results = $this->bigQuery->runQuery($queryJobConfig);
+        $params = [];
+        // Si es evaluador_pais, filtrar solo su país
+        if (
+            $userData && $userData['rol'] === 'evaluador_pais' &&
+            isset($userData['pais_acceso']) && $userData['pais_acceso'] !== 'ALL'
+        ) {
+            $query .= ' AND a.pais = @pais_acceso';
+            $params['pais_acceso'] = $this->sanitize($userData['pais_acceso']);
+        }
 
-    $tiendas = [];
-    foreach ($results->rows() as $row) {
-        $tiendas[] = $row['TIENDA'];
+        $query .= ' ORDER BY a.tienda';
+
+        $queryJobConfig = $this->bigQuery->query($query)
+            ->parameters($params);
+        $results = $this->bigQuery->runQuery($queryJobConfig);
+
+        $tiendas = [];
+        foreach ($results->rows() as $row) {
+            $tiendas[] = $row['tienda'];
+        }
+
+        return $tiendas;
     }
-
-    return $tiendas;
-}
-
 }
