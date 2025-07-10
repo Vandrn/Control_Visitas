@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Google\Cloud\BigQuery\BigQueryClient;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 
 class Usuario
 {
@@ -23,9 +24,12 @@ class Usuario
             'projectId' => config('admin.bigquery.project_id'),
             'keyFilePath' => storage_path('app' . config('admin.bigquery.key_file')),
         ]);
-
-        $this->visitasTable = config('admin.bigquery.visitas_table', $this->visitasTable);
+    
+        $this->visitasTable = 'GR_nuevo';
+    
+        Log::info('✅ Tabla de visitas usada: ' . $this->visitasTable);
     }
+
 
     /**
      * Buscar usuario por email
