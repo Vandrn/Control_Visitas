@@ -242,8 +242,8 @@ class FormularioController extends Controller
 
             // === INSERTAR EN BIGQUERY ===
             $table = $this->bigQuery
-                ->dataset(env('BIGQUERY_DATASET'))
-                ->table(env('BIGQUERY_TABLE'));
+                ->dataset(config('admin.bigquery.dataset'))
+                ->table(config('admin.bigquery.visitas_table'));
 
             $insertResponse = $table->insertRows([['data' => $data]]);
 
