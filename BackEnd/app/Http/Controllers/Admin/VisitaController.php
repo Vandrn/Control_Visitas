@@ -7,6 +7,7 @@ use App\Models\Usuario;
 use Illuminate\Http\Request;
 use Google\Cloud\Storage\StorageClient; // AGREGAR ESTA LÍNEA AL INICIO
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon; // Asegúrate de tener Carbon importado
 
 class VisitaController extends Controller
 {
@@ -46,6 +47,10 @@ class VisitaController extends Controller
 
             // Procesar datos para display
             $visita = $this->usuario->procesarDatosVisita($visitaRaw);
+
+            // Convertir fechas a hora local (UTC-6)
+            $visita['fecha_hora_inicio_local'] = Carbon::parse($visitaRaw['fecha_hora_inicio'])->subHours(6)->format('Y-m-d H:i:s');
+            $visita['fecha_hora_fin_local'] = Carbon::parse($visitaRaw['fecha_hora_fin'])->format('Y-m-d H:i:s');
 
             // Calcular puntuaciones
             $puntuaciones = $this->usuario->calcularPuntuaciones($visita);
@@ -386,5 +391,41 @@ class VisitaController extends Controller
         }
 
         return false;
+    }
+
+    /**
+     * Mostrar detalle de una sección específica de la visita
+     */
+    public function detalleArea($id, $seccion)
+    {
+        $user = session('admin_user');
+
+        $secciones = $visita['secciones'] ?? [];
+        $areaSeleccionada = collect($secciones)->firstWhere('codigo_seccion', $seccion);
+
+
+        // Buscar la sección específica
+        $areaSeleccionada = collect($secciones)->firstWhere('codigo_seccion', $seccion);
+
+        if (!$areaSeleccionada) {
+            abort(404, 'Área no encontrada');
+        }
+
+        return view('admin.visitas.detalle_area', [
+            'area' => $areaSeleccionada,
+            'titulo' => $this->obtenerNombreSeccion($seccion)
+        ]);
+    }
+
+    // Puedes tener un helper privado:
+    private function obtenerNombreSeccion($codigo)
+    {
+        return match ($codigo) {
+            1 => 'Operaciones',
+            2 => 'Administración',
+            3 => 'Producto',
+            4 => 'Personal',
+            default => 'Área desconocida'
+        };
     }
 }

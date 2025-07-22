@@ -166,21 +166,21 @@ function generateKpiIcon($cumplimiento) {
                 @if(isset($puntuaciones[$seccion]))
                     @php
                         $puntuacion = $puntuaciones[$seccion];
-                        
+
                         // Special handling for KPIs
                         if ($seccion === 'kpis') {
                             \Log::debug('Processing KPIs section');
                             \Log::debug('Raw KPI data: ' . json_encode($puntuacion));
-                            
+
                             // Get KPI responses from the visit data
                             $kpiResponses = [];
                             if (isset($visita['kpis']['preguntas'])) {
                                 $kpiResponses = $visita['kpis']['preguntas'];
                             }
-                            
+
                             $kpiScore = calculateKpiScore($kpiResponses);
                             \Log::debug('Final KPI score: ' . $kpiScore);
-                            
+
                             $puntuacion['promedio'] = $kpiScore;
                             $puntuacion['porcentaje'] = $kpiScore * 100;
                             $puntuacion['estrellas'] = $kpiScore * 5;
@@ -188,11 +188,11 @@ function generateKpiIcon($cumplimiento) {
                                 return $resp !== null && $resp !== '';
                             }));
                         }
-                        
+
                         $titulo = ucfirst($seccion);
                         if($seccion === 'administracion') $titulo = 'Administración';
                         if($seccion === 'kpis') $titulo = 'KPIs';
-                        
+
                         $iconClass = match($seccion) {
                             'operaciones' => 'fa-cogs',
                             'administracion' => 'fa-file-alt',
@@ -201,9 +201,22 @@ function generateKpiIcon($cumplimiento) {
                             'kpis' => 'fa-chart-bar',
                             default => 'fa-chart-line'
                         };
+
+                        $codigoMap = [
+                            'operaciones' => 1,
+                            'administracion' => 2,
+                            'producto' => 3,
+                            'personal' => 4,
+                        ];
                     @endphp
-                    
-                    <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200">
+
+                    @if($seccion !== 'kpis')
+                        <a href="{{ route('detalle.area', ['id' => $visita['id'], 'seccion' => $codigoMap[$seccion] ?? '']) }}"
+                        class="block bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200 text-inherit no-underline">
+                    @else
+                        <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200">
+                    @endif
+
                         <div class="flex items-start justify-between mb-3">
                             <div class="flex items-center space-x-3">
                                 <div class="p-2 bg-blue-100 rounded-lg">
@@ -229,16 +242,16 @@ function generateKpiIcon($cumplimiento) {
                                 {!! generateCircularProgress($puntuacion['promedio'], 50, 3) !!}
                             </div>
                         </div>
-                        
+
                         <div class="space-y-3">
                             <div>
                                 {!! generateStars($puntuacion['promedio'], 'sm', true, $seccion === 'kpis') !!}
                             </div>
-                            
+
                             <div>
                                 {!! generateProgressBar($puntuacion['promedio'], 'h-2', false) !!}
                             </div>
-                            
+
                             <div class="flex justify-between items-center">
                                 @php
                                     $porcentaje = $puntuacion['porcentaje'];
@@ -247,11 +260,11 @@ function generateKpiIcon($cumplimiento) {
                                             ($porcentaje >= 40 ? ['text' => 'Regular', 'class' => 'bg-orange-100 text-orange-800'] : 
                                             ['text' => 'Deficiente', 'class' => 'bg-red-100 text-red-800']));
                                 @endphp
-                                
+
                                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $badge['class'] }}">
                                     {{ $badge['text'] }}
                                 </span>
-                                
+
                                 <span class="text-sm font-semibold text-gray-700">
                                     @if($seccion === 'kpis')
                                         {{ number_format($puntuacion['porcentaje'], 0) }}% cumple
@@ -261,7 +274,12 @@ function generateKpiIcon($cumplimiento) {
                                 </span>
                             </div>
                         </div>
-                    </div>
+
+                    @if($seccion !== 'kpis')
+                        </a>
+                    @else
+                        </div>
+                    @endif
                 @endif
             @endforeach
         </div>
