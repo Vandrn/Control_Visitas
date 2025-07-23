@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\Facades\Image;
 use Illuminate\Support\Str;
+use App\Mail\ConfirmacionVisitaMail;
+use Illuminate\Support\Facades\Mail;
 
 class FormularioController extends Controller
 {
@@ -248,8 +250,56 @@ class FormularioController extends Controller
             $insertResponse = $table->insertRows([['data' => $data]]);
 
             if ($insertResponse->isSuccessful()) {
-                session()->forget('uploaded_images'); // limpiar sesión de imágenes
-                return response()->json(['success' => true, 'message' => 'Formulario guardado correctamente']);
+                session()->forget('uploaded_images');
+
+                try {
+                    $correoUsuario = $data['correo_realizo'];
+
+                    // === CONSULTAR correo tienda desde BigQuery ===
+                    $queryTienda = $this->bigQuery->query(
+                        'SELECT CORREO FROM adoc-bi-dev.OPB.crm_store_email_temp
+                        WHERE CRM_ID_TIENDA = @tienda AND PAIS = @pais'
+                    )->parameters([
+                        'tienda' => $data['tienda'],
+                        'pais' => $data['pais']
+                    ]);
+
+                    $resultTienda = $this->bigQuery->runQuery($queryTienda);
+                    $correoTienda = null;
+                    foreach ($resultTienda->rows() as $row) {
+                        $correoTienda = $row['CORREO'];
+                    }
+
+                    // === CONSULTAR correo jefe desde BigQuery ===
+                    $queryJefe = $this->bigQuery->query(
+                        'SELECT CORREO FROM adoc-bi-dev.OPB.jefes_zona_temp
+                        WHERE ZONA = @zona AND PAIS = @pais'
+                    )->parameters([
+                        'zona' => $data['zona'],
+                        'pais' => $data['pais']
+                    ]);
+
+                    $resultJefe = $this->bigQuery->runQuery($queryJefe);
+                    $correoJefe = null;
+                    foreach ($resultJefe->rows() as $row) {
+                        $correoJefe = $row['CORREO'];
+                    }
+
+                    // === ENVIAR CORREO ===
+                    $destinatariosCC = array_filter([$correoTienda, $correoJefe]);
+
+                    if ($correoUsuario) {
+                        \Mail::to($correoUsuario)
+                            ->cc($destinatariosCC)
+                            ->send(new \App\Mail\ConfirmacionVisitaMail($data));
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('❌ Error al enviar correo de confirmación', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+
+                return response()->json(['success' => true, 'message' => 'Formulario guardado correctamente y correo enviado']);
             } else {
                 Log::error('❌ Error al insertar en BigQuery', [
                     'errores' => $insertResponse->failedRows()

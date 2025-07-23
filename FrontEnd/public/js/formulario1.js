@@ -11,11 +11,11 @@ $(document).ready(function () {
         const R = 6371000; // Radio de la Tierra en metros
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLng = (lng2 - lng1) * Math.PI / 180;
-        const a = 
-            Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-            Math.sin(dLng/2) * Math.sin(dLng/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c; // Distancia en metros
     }
     
@@ -145,7 +145,7 @@ $(document).ready(function () {
         imageInputs.each(function () {
             const $input = $(this);
             const rawName = $input.attr('name');
-            const fieldName = rawName.replace(/\[\]$/, ''); // ✅ Elimina corchetes [] si hay
+            const fieldName = rawName.replace(/\[\]$/, ''); // Elimina corchetes [] si hay
 
             $input.off('change.incremental').on('change.incremental', async function (e) {
                 const files = Array.from(e.target.files);
@@ -156,7 +156,7 @@ $(document).ready(function () {
                     return;
                 }
 
-                // 👇 asegúrate de re-declararlo aquí también por seguridad
+                // asegúrate de re-declararlo aquí también por seguridad
                 const rawName = $input.attr('name');
                 const fieldName = rawName.replace(/\[\]$/, '');
 
@@ -354,7 +354,6 @@ $(document).ready(function () {
         }
     }
 
-
     /**
      * Mostrar indicador de subida mejorado
      */
@@ -363,17 +362,35 @@ $(document).ready(function () {
 
         if (show && $indicator.length === 0) {
             $indicator = $(`
-            <div class="upload-indicator" style="
-                margin-top: 8px; 
-                color: #059669; 
-                font-size: 14px; 
-                display: flex; 
-                align-items: center;
-                background: #f0f9ff;
-                padding: 8px 12px;
-                border-radius: 8px;
-                border-left: 4px solid #059669;
-            ">
+                <div class="upload-indicator" style="
+                    margin-top: 8px; 
+                    color: #059669; 
+                    font-size: 14px; 
+                    display: flex; 
+                    align-items: center;
+                    background: #f0f9ff;
+                    padding: 8px 12px;
+                    border-radius: 8px;
+                    border-left: 4px solid #059669;
+                ">
+                    <div class="spinner" style="
+                        width: 16px; height: 16px; 
+                        border: 2px solid #d1fae5; 
+                        border-top: 2px solid #059669; 
+                        border-radius: 50%; 
+                        animation: spin 1s linear infinite; 
+                        margin-right: 8px;
+                    "></div>
+                    🚀 ${mensaje} ${fieldName}...
+                </div>
+                <style>
+                    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                </style>
+            `);
+            $input.after($indicator);
+        } else if (show && $indicator.length > 0) {
+            // Actualizar mensaje
+            $indicator.html(`
                 <div class="spinner" style="
                     width: 16px; height: 16px; 
                     border: 2px solid #d1fae5; 
@@ -383,25 +400,7 @@ $(document).ready(function () {
                     margin-right: 8px;
                 "></div>
                 🚀 ${mensaje} ${fieldName}...
-            </div>
-            <style>
-                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-            </style>
-        `);
-            $input.after($indicator);
-        } else if (show && $indicator.length > 0) {
-            // Actualizar mensaje
-            $indicator.html(`
-            <div class="spinner" style="
-                width: 16px; height: 16px; 
-                border: 2px solid #d1fae5; 
-                border-top: 2px solid #059669; 
-                border-radius: 50%; 
-                animation: spin 1s linear infinite; 
-                margin-right: 8px;
-            "></div>
-            🚀 ${mensaje} ${fieldName}...
-        `);
+            `);
         } else if (!show && $indicator.length > 0) {
             $indicator.remove();
         }
@@ -415,34 +414,34 @@ $(document).ready(function () {
 
         if ($preview.length === 0) {
             $preview = $(`
-            <div class="image-preview" style="
-                margin-top: 12px;
-                padding: 12px;
-                background: #f0f9ff;
-                border-radius: 8px;
-                border: 2px solid #059669;
-            ">
-                <img src="${url}" alt="${fieldName}" style="
-                    max-width: 120px; 
-                    max-height: 120px; 
+                <div class="image-preview" style="
+                    margin-top: 12px;
+                    padding: 12px;
+                    background: #f0f9ff;
                     border-radius: 8px;
-                    display: block;
-                    margin: 0 auto 8px auto;
+                    border: 2px solid #059669;
                 ">
-                <div style="
-                    font-size: 12px; 
-                    color: #059669; 
-                    text-align: center;
-                    font-weight: bold;
-                ">✅ Imagen guardada en servidor</div>
-                <div style="
-                    font-size: 11px; 
-                    color: #6b7280; 
-                    text-align: center;
-                    margin-top: 4px;
-                ">URL: ${url.substring(0, 40)}...</div>
-            </div>
-        `);
+                    <img src="${url}" alt="${fieldName}" style="
+                        max-width: 120px; 
+                        max-height: 120px; 
+                        border-radius: 8px;
+                        display: block;
+                        margin: 0 auto 8px auto;
+                    ">
+                    <div style="
+                        font-size: 12px; 
+                        color: #059669; 
+                        text-align: center;
+                        font-weight: bold;
+                    ">✅ Imagen guardada en servidor</div>
+                    <div style="
+                        font-size: 11px; 
+                        color: #6b7280; 
+                        text-align: center;
+                        margin-top: 4px;
+                    ">URL: ${url.substring(0, 40)}...</div>
+                </div>
+            `);
             $input.after($preview);
         } else {
             $preview.find('img').attr('src', url);
@@ -450,6 +449,7 @@ $(document).ready(function () {
         }
     }
 
+    // Recopilar respuestas antes de guardar
     function obtenerEstructuraFinal() {
         transformarValoresRadio(); // Asegúrate de tener los valores transformados
 
@@ -840,8 +840,8 @@ $(document).ready(function () {
     mostrarSeccion(indiceActual);
 
     /**
- * Mostrar notificaciones tipo toast
- */
+     * Mostrar notificaciones tipo toast
+     */
     function mostrarNotificacion(mensaje, tipo = 'info') {
         const colores = {
             'success': '#059669',
@@ -858,50 +858,50 @@ $(document).ready(function () {
         };
 
         const $notification = $(`
-        <div class="notification" style="
-            position: fixed; 
-            top: 20px; 
-            right: 20px; 
-            z-index: 9999;
-            background: ${colores[tipo]}; 
-            color: white; 
-            padding: 12px 16px; 
-            border-radius: 8px;
-            font-size: 14px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            max-width: 350px; 
-            min-width: 250px;
-            animation: slideIn 0.3s ease;
-            display: flex;
-            align-items: center;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        ">
-            <span style="margin-right: 8px; font-size: 16px;">${iconos[tipo]}</span>
-            <span>${mensaje}</span>
-        </div>
-        <style>
-            @keyframes slideIn {
-                from { 
-                    transform: translateX(100%); 
-                    opacity: 0; 
+            <div class="notification" style="
+                position: fixed; 
+                top: 20px; 
+                right: 20px; 
+                z-index: 9999;
+                background: ${colores[tipo]}; 
+                color: white; 
+                padding: 12px 16px; 
+                border-radius: 8px;
+                font-size: 14px; 
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                max-width: 350px; 
+                min-width: 250px;
+                animation: slideIn 0.3s ease;
+                display: flex;
+                align-items: center;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            ">
+                <span style="margin-right: 8px; font-size: 16px;">${iconos[tipo]}</span>
+                <span>${mensaje}</span>
+            </div>
+            <style>
+                @keyframes slideIn {
+                    from { 
+                        transform: translateX(100%); 
+                        opacity: 0; 
+                    }
+                    to { 
+                        transform: translateX(0); 
+                        opacity: 1; 
+                    }
                 }
-                to { 
-                    transform: translateX(0); 
-                    opacity: 1; 
+                @keyframes slideOut {
+                    from { 
+                        transform: translateX(0); 
+                        opacity: 1; 
+                    }
+                    to { 
+                        transform: translateX(100%); 
+                        opacity: 0; 
+                    }
                 }
-            }
-            @keyframes slideOut {
-                from { 
-                    transform: translateX(0); 
-                    opacity: 1; 
-                }
-                to { 
-                    transform: translateX(100%); 
-                    opacity: 0; 
-                }
-            }
-        </style>
-    `);
+            </style>
+        `);
 
         // Agregar al body
         $('body').append($notification);
@@ -1003,22 +1003,48 @@ $(document).ready(function () {
         }[tipo] || 'background: #6b7280; color: white;';
 
         const mensajeHtml = `
-        <div id="mensaje-distancia" style="
-            margin-top: 8px; 
-            padding: 12px 16px; 
-            border-radius: 8px; 
-            font-size: 14px; 
-            font-weight: 500;
-            text-align: center;
-            ${claseColor}
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        ">
-            ${mensaje}
-        </div>
-    `;
+            <div id="mensaje-distancia" style="
+                margin-top: 8px; 
+                padding: 12px 16px; 
+                border-radius: 8px; 
+                font-size: 14px; 
+                font-weight: 500;
+                text-align: center;
+                ${claseColor}
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            ">
+                ${mensaje}
+            </div>
+        `;
 
         // Insertar después del select de tienda
         $('#CRM_ID_TIENDA').after(mensajeHtml);
     }
+
+
+    // 🔄 Mantener sesión activa cada 3 minutos con alerta si se pierde
+    let intentosFallidosSesion = 0;
+    const limiteFallosSesion = 2; // Al segundo fallo consecutivo, muestra alerta
+    
+    setInterval(() => {
+        fetch('/keep-alive', {
+            method: 'GET',
+            credentials: 'same-origin'
+        }).then(response => {
+            if (!response.ok) {
+                throw new Error(`Código ${response.status}`);
+            }
+            intentosFallidosSesion = 0; // Reinicia contador si responde bien
+            console.log('⏳ Sesión mantenida activa');
+        }).catch((err) => {
+            intentosFallidosSesion++;
+            console.warn(`⚠️ Intento fallido ${intentosFallidosSesion}:`, err);
+    
+            if (intentosFallidosSesion >= limiteFallosSesion) {
+                mostrarNotificacion('⚠️ Tu sesión ha expirado o no se pudo renovar. Por favor recarga la página.', 'warning');
+            }
+        });
+    }, 3 * 60 * 1000); // Cada 3 minutos
+
 
 });
