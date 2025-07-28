@@ -6,11 +6,9 @@ use Illuminate\Http\Request;
 use Google\Cloud\BigQuery\BigQueryClient;
 use Google\Cloud\Storage\StorageClient;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
-use Intervention\Image\Facades\Image;
 use Illuminate\Support\Str;
-use App\Mail\ConfirmacionVisitaMail;
-use Illuminate\Support\Facades\Mail;
+use App\Helpers\EvaluacionHelper;
+use Illuminate\Support\Facades\File;
 
 class FormularioController extends Controller
 {
@@ -194,10 +192,13 @@ class FormularioController extends Controller
     public function guardarSeccion(Request $request)
     {
         try {
+            set_time_limit(180); // 3 minutos de tiempo máximo
             if (!session()->has('token_unico')) {
                 session(['token_unico' => Str::uuid()->toString()]);
             }
             $formId = session('token_unico');
+            $tiendaCompleta = $request->input('tienda');
+            $crmIdTienda = trim(explode('-', $tiendaCompleta)[0] ?? $tiendaCompleta); // extrae "C14"
 
             // === DATOS BASE (orden según esquema) ===
             $data = [
@@ -207,7 +208,7 @@ class FormularioController extends Controller
                 'fecha_hora_fin' => now(),
                 'correo_realizo' => $request->input('correo_realizo'),
                 'lider_zona' => $request->input('lider_zona'),
-                'tienda' => $request->input('tienda'),
+                'tienda' => $tiendaCompleta,
                 'ubicacion' => $request->input('ubicacion'),
                 'pais' => $request->input('pais'),
                 'zona' => $request->input('zona'),
@@ -258,13 +259,16 @@ class FormularioController extends Controller
                     // === CONSULTAR correo tienda desde BigQuery ===
                     $queryTienda = $this->bigQuery->query(
                         'SELECT CORREO FROM adoc-bi-dev.OPB.crm_store_email_temp
-                        WHERE CRM_ID_TIENDA = @tienda AND PAIS = @pais'
+                                WHERE CRM_ID_TIENDA = @tienda AND PAIS = @pais'
                     )->parameters([
-                        'tienda' => $data['tienda'],
+                        'tienda' => $crmIdTienda,  // 👈 usamos solo "C14"
                         'pais' => $data['pais']
                     ]);
 
+
+                    Log::info('➡️ Consultando correo tienda...');
                     $resultTienda = $this->bigQuery->runQuery($queryTienda);
+                    Log::info('✅ Consulta correo tienda completada');
                     $correoTienda = null;
                     foreach ($resultTienda->rows() as $row) {
                         $correoTienda = $row['CORREO'];
@@ -272,34 +276,96 @@ class FormularioController extends Controller
 
                     // === CONSULTAR correo jefe desde BigQuery ===
                     $queryJefe = $this->bigQuery->query(
-                        'SELECT CORREO FROM adoc-bi-dev.OPB.jefes_zona_temp
-                        WHERE ZONA = @zona AND PAIS = @pais'
+                        'SELECT CORREO FROM adoc-bi-dev.OPB.DIM_GERENTES
+                        WHERE PAIS = @pais'
                     )->parameters([
-                        'zona' => $data['zona'],
                         'pais' => $data['pais']
                     ]);
 
+                    Log::info('➡️ Consultando correo jefe...');
                     $resultJefe = $this->bigQuery->runQuery($queryJefe);
+                    Log::info('✅ Consulta correo jefe completada');
                     $correoJefe = null;
                     foreach ($resultJefe->rows() as $row) {
                         $correoJefe = $row['CORREO'];
                     }
 
+                    // === CALCULAR PUNTUACIONES ===
+                    $promediosPorArea = EvaluacionHelper::calcularPromediosPorArea($data['secciones'], $data['kpis']);
+                    $totales = EvaluacionHelper::calcularTotalPonderado($promediosPorArea);
+
+                    $data['resumen_areas'] = [];
+                    foreach ($promediosPorArea as $area => $info) {
+                        $data['resumen_areas'][] = [
+                            'nombre' => ucfirst($area),
+                            'puntos' => $info['promedio'] ?? 'N/A',
+                            'estrellas' => isset($info['promedio']) ? intval(round($info['promedio'] / 0.2)) : 'N/A',
+                        ];
+                    }
+
+                    $data['puntos_totales'] = $totales['puntaje'];
+                    $data['estrellas'] = $totales['estrellas'];
+
                     // === ENVIAR CORREO ===
                     $destinatariosCC = array_filter([$correoTienda, $correoJefe]);
 
                     if ($correoUsuario) {
-                        \Mail::to($correoUsuario)
-                            ->cc($destinatariosCC)
-                            ->send(new \App\Mail\ConfirmacionVisitaMail($data));
+                        try {
+                            Log::info('➡️ Generando HTML...');
+
+                            // Renderizar Blade como HTML
+                            $html = view('emails.visita_confirmacion', ['datos' => $data])->render();
+
+                            // Insertar comentarios HTML con correos justo después del <body>
+                            $comentarioCorreos = "<!--\n";
+                            $comentarioCorreos .= "correo_realizo: {$correoUsuario}\n";
+                            $comentarioCorreos .= "correo_tienda: {$correoTienda}\n";
+                            $comentarioCorreos .= "correo_jefe_zona: {$correoJefe}\n";
+                            $comentarioCorreos .= "-->\n";
+
+                            // Agregar el comentario justo después del <body>
+                            $html = preg_replace('/<body[^>]*>/', '$0' . "\n" . $comentarioCorreos, $html);
+
+                            Log::info('✅ HTML generado correctamente');
+
+                            // Crear nombre del archivo único
+                            $nombreArchivo = 'visita_' . Str::random(8) . '.html';
+
+                            // Crear carpeta si no existe
+                            $rutaCarpeta = public_path('correos');
+                            if (!File::exists($rutaCarpeta)) {
+                                File::makeDirectory($rutaCarpeta, 0755, true);
+                            }
+
+                            // Guardar HTML en el archivo
+                            $rutaArchivo = $rutaCarpeta . '/' . $nombreArchivo;
+                            Log::info('➡️ Guardando archivo HTML...');
+                            File::put($rutaArchivo, $html);
+                            Log::info('✅ Archivo HTML guardado');
+
+                            // URL pública para usarla en Power Automate
+                            $urlHtml = url('correos/' . $nombreArchivo);
+
+                            Log::info('✅ HTML de visita generado y guardado para Power Automate', [
+                                'url' => $urlHtml
+                            ]);
+                        } catch (\Exception $e) {
+                            Log::error('❌ Error al crear el HTML de confirmación', [
+                                'error' => $e->getMessage()
+                            ]);
+                        }
                     }
                 } catch (\Exception $e) {
-                    \Log::error('❌ Error al enviar correo de confirmación', [
+                    Log::error('❌ Error al crear el correo de confirmación', [
                         'error' => $e->getMessage()
                     ]);
                 }
 
-                return response()->json(['success' => true, 'message' => 'Formulario guardado correctamente y correo enviado']);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Formulario guardado correctamente y HTML generado',
+                    'url_html' => $urlHtml ?? null
+                ]);
             } else {
                 Log::error('❌ Error al insertar en BigQuery', [
                     'errores' => $insertResponse->failedRows()
