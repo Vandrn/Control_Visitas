@@ -400,11 +400,23 @@ class VisitaController extends Controller
     {
         $user = session('admin_user');
 
+        // 1️⃣ Obtener visita completa
+        $visitaRaw = $this->usuario->getVisitaCompleta(
+            $id,
+            $user['rol'],
+            $user['email']
+        );
+
+        // 2️⃣ Validación de acceso
+        if (!$visitaRaw || !$this->validarAccesoPais($visitaRaw, $user)) {
+            abort(403, 'No tiene permisos para ver esta área.');
+        }
+
+        // 3️⃣ Procesar visita
+        $visita = $this->usuario->procesarDatosVisita($visitaRaw);
+
+        // 4️⃣ Filtrar sección deseada
         $secciones = $visita['secciones'] ?? [];
-        $areaSeleccionada = collect($secciones)->firstWhere('codigo_seccion', $seccion);
-
-
-        // Buscar la sección específica
         $areaSeleccionada = collect($secciones)->firstWhere('codigo_seccion', $seccion);
 
         if (!$areaSeleccionada) {

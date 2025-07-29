@@ -12,7 +12,7 @@
     @include('admin.visitas.partials.distance-validation')
     
     {{-- AGREGAR ESTA L�0�1NEA --}}
-    @include('admin.visitas.partials.visual-scoring')
+    @include('admin.visitas.partials.visual-scoring', ['visita' => $visita])
 
     @include('admin.visitas.partials.kpi')
     
