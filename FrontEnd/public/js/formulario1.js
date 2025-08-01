@@ -95,7 +95,7 @@ $(document).ready(function () {
                 if (Array.isArray(data)) {
                     data.forEach(t => {
                         $("#CRM_ID_TIENDA").append(
-                            `<option value="${t.TIENDA}" data-ubicacion="${t.UBICACION}" data-geo="${t.GEO || ''}"> ${t.TIENDA} - ${t.UBICACION}</option>`
+                            `<option value="${t.TIENDA}" data-ubicacion="${t.UBICACION}" data-geo="${t.GEO || ''}">${t.TIENDA}</option>`
                         );
                     });
 
@@ -1025,7 +1025,7 @@ $(document).ready(function () {
     // 🔄 Mantener sesión activa cada 3 minutos con alerta si se pierde
     let intentosFallidosSesion = 0;
     const limiteFallosSesion = 2; // Al segundo fallo consecutivo, muestra alerta
-    
+
     setInterval(() => {
         fetch('/keep-alive', {
             method: 'GET',
@@ -1039,7 +1039,7 @@ $(document).ready(function () {
         }).catch((err) => {
             intentosFallidosSesion++;
             console.warn(`⚠️ Intento fallido ${intentosFallidosSesion}:`, err);
-    
+
             if (intentosFallidosSesion >= limiteFallosSesion) {
                 mostrarNotificacion('⚠️ Tu sesión ha expirado o no se pudo renovar. Por favor recarga la página.', 'warning');
             }

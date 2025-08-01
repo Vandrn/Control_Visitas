@@ -33,27 +33,26 @@ class EvaluacionHelper
 
         // ✅ Agregar KPIs como sección especial
         if (!empty($kpis)) {
-            $cumplen = 0;
+            $puntaje = 0;
             $total = 0;
 
             foreach ($kpis as $kpi) {
                 if (!str_starts_with($kpi['codigo_pregunta'], 'OBS_')) {
                     $respuesta = strtolower(trim($kpi['valor'] ?? ''));
-                    if (in_array($respuesta, ['Cumple', 'No Cumple', 'n/a'])) {
-                        if ($respuesta === 'Cumple') {
-                            $cumplen++;
-                        }
-                        if ($respuesta !== 'n/a') {
-                            $total++;
-                        }
+
+                    if ($respuesta === 'cumple') {
+                        $puntaje += 1;
+                        $total++;
+                    } elseif ($respuesta === 'no cumple') {
+                        $total++;
                     }
                 }
             }
 
-            $porcentaje = $total > 0 ? round($cumplen / $total, 2) : null;
+            $promedio = $total > 0 ? round($puntaje / $total, 2) : null;
 
-            $resultados['Kpi'] = [
-                'promedio' => $porcentaje,
+            $resultados['kpi'] = [
+                'promedio' => $promedio,
                 'total_preguntas' => $total,
             ];
         }

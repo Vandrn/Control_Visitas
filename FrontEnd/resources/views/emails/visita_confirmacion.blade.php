@@ -27,7 +27,8 @@
 </head>
 
 <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-    <h1>📝 Resultado de la visita a {{ $datos['tienda'] }}</h1>
+    @php use Illuminate\Support\Str; @endphp
+    <h1>📝 Resultado de la visita a {{ Str::before($datos['tienda'], ' -') }}</h1>
 
     <p>
         <strong>Fecha:</strong> {{ $datos['fecha_hora_fin'] }}<br>

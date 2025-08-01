@@ -60,27 +60,60 @@ class FormularioController extends Controller
 
     public function ObtenerPaises()
     {
-        // Modificar la consulta para usar BigQuery
-        $query = 'SELECT DISTINCT BV_PAIS, SK_PAIS FROM `adoc-bi-dev.OPB.DIM_PAIS`';
+        $query = "
+            SELECT DISTINCT T001W.LAND1 AS BV_PAIS
+            FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
+                ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
+            WHERE ADRC.COUNTRY IN ('SV', 'GT', 'HN', 'CR', 'NI', 'PA')
+            AND T001W.VLFKZ = 'A'
+            AND ADRC.PO_BOX <> 'CL'
+            AND ADRC.SORT1 NOT IN ('WHS','BT1')
+            AND TVKTT.SPRAS = 'S'
+            AND ADR6.SMTP_ADDR IS NOT NULL
+        ";
+
         $queryJobConfig = $this->bigQuery->query($query);
         $results = $this->bigQuery->runQuery($queryJobConfig);
 
         $paises = [];
         foreach ($results->rows() as $row) {
             $paises[] = [
-                'label' => $row['BV_PAIS'],   // lo que se muestra
-                'value' => $row['SK_PAIS'],   // lo que se usa para buscar zonas en dim_tienda
+                'label' => $row['BV_PAIS'],
+                'value' => $row['BV_PAIS']
             ];
         }
 
         return response()->json($paises);
     }
 
-    public function obtenerZonas($sk_pais)
+    public function obtenerZonas($bv_pais)
     {
-        $query = 'SELECT DISTINCT ZONA FROM `adoc-bi-dev.OPB.DIM_TIENDA` WHERE SK_PAIS = @sk_pais';
+        $query = "
+            SELECT DISTINCT ADRC.NAME3 AS ZONA
+            FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
+                ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
+            WHERE T001W.LAND1 = @bv_pais
+            AND T001W.VLFKZ = 'A'
+            AND ADRC.PO_BOX <> 'CL'
+            AND ADRC.SORT1 NOT IN ('WHS','BT1')
+            AND TVKTT.SPRAS = 'S'
+            AND ADR6.SMTP_ADDR IS NOT NULL
+        ";
+
         $queryJobConfig = $this->bigQuery->query($query)->parameters([
-            'sk_pais' => $sk_pais
+            'bv_pais' => $bv_pais
         ]);
         $results = $this->bigQuery->runQuery($queryJobConfig);
 
@@ -92,11 +125,34 @@ class FormularioController extends Controller
         return response()->json($zonas);
     }
 
-    public function obtenerTiendas($sk_pais, $zona)
+
+    public function obtenerTiendas($bv_pais, $zona)
     {
-        $query = 'SELECT dm.TIENDA, dm.UBICACION, a.GEO FROM `adoc-bi-dev.OPB.DIM_TIENDA` dm left join (select concat(dsm.LATITUD,",",replace(dsm.LONGITUD,"\'","")) GEO, dsm.PAIS_TIENDA from `adoc-bi-dev`.bi_lab.dim_store_master dsm where dsm.LATITUD not in (\'nan\')) a on dm.BV_PAIS_TIENDA = a.PAIS_TIENDA WHERE dm.SK_PAIS = @sk_pais AND dm.ZONA = @zona';
+        $query = "
+            SELECT 
+                ADRC.NAME1 AS TIENDA,
+                ADRC.NAME2 AS UBICACION,
+                CONCAT(GEO.LATITUD, ',', GEO.LONGITUD) AS GEO
+            FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
+                ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
+            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
+            LEFT JOIN `adoc-bi-prd`.`BI_Repo_Qlik.DIM_GEOLOCALIZACION` AS GEO ON GEO.WERKS = CAST(T001W.WERKS AS INT64)
+            WHERE T001W.LAND1 = @bv_pais
+            AND ADRC.NAME3 = @zona
+            AND T001W.VLFKZ = 'A'
+            AND ADRC.PO_BOX <> 'CL'
+            AND ADRC.SORT1 NOT IN ('WHS','BT1')
+            AND TVKTT.SPRAS = 'S'
+            AND ADR6.SMTP_ADDR IS NOT NULL
+        ";
+
         $queryJobConfig = $this->bigQuery->query($query)->parameters([
-            'sk_pais' => $sk_pais,
+            'bv_pais' => $bv_pais,
             'zona' => $zona
         ]);
         $results = $this->bigQuery->runQuery($queryJobConfig);
@@ -104,9 +160,9 @@ class FormularioController extends Controller
         $tiendas = [];
         foreach ($results->rows() as $row) {
             $tiendas[] = [
-                'TIENDA' => $row['TIENDA'],
-                'UBICACION' => $row['UBICACION'],
-                'GEO' => $row['GEO'] ?? null  // Coordenadas: "lat,lng"
+                'TIENDA' => $row['TIENDA'],       // Solo NAME1, sin concatenación
+                'UBICACION' => $row['UBICACION'], // Guardado si lo necesitas internamente
+                'GEO' => $row['GEO'] ?? null
             ];
         }
 
@@ -198,7 +254,6 @@ class FormularioController extends Controller
             }
             $formId = session('token_unico');
             $tiendaCompleta = $request->input('tienda');
-            $crmIdTienda = trim(explode('-', $tiendaCompleta)[0] ?? $tiendaCompleta); // extrae "C14"
 
             // === DATOS BASE (orden según esquema) ===
             $data = [
@@ -213,6 +268,19 @@ class FormularioController extends Controller
                 'pais' => $request->input('pais'),
                 'zona' => $request->input('zona'),
             ];
+
+            $crmIdTienda = trim(Str::before($tiendaCompleta, ' '));
+            $crmIdTiendaCompleto = $data['pais'] . $crmIdTienda;
+            // Convertir código SV a nombre completo
+            $nombrePais = match ($data['pais']) {
+                'SV' => 'EL SALVADOR',
+                'GT' => 'GUATEMALA',
+                'HN' => 'HONDURAS',
+                'NI' => 'NICARAGUA',
+                'CR' => 'COSTA RICA',
+                'PA' => 'PANAMÁ',
+                default => $data['pais'], // fallback por si acaso
+            };
 
             // === SECCIONES ===
             $data['secciones'] = $request->input('secciones', []);
@@ -258,36 +326,47 @@ class FormularioController extends Controller
 
                     // === CONSULTAR correo tienda desde BigQuery ===
                     $queryTienda = $this->bigQuery->query(
-                        'SELECT CORREO FROM adoc-bi-dev.OPB.crm_store_email_temp
-                                WHERE CRM_ID_TIENDA = @tienda AND PAIS = @pais'
+                        'SELECT correo FROM `adoc-bi-dev.OPB.crm_store_email`
+                                WHERE pais_tienda = @tienda AND pais = @pais'
                     )->parameters([
-                        'tienda' => $crmIdTienda,  // 👈 usamos solo "C14"
+                        'tienda' => $crmIdTiendaCompleto,
+                        'pais' => $nombrePais // Usa el nombre completo del país
+                    ]);
+
+                    Log::info('➡️ Consultando correo tienda...');
+                    Log::info("🔎 Buscando correo de tienda con:", [
+                        'pais_tienda' => $crmIdTiendaCompleto,
                         'pais' => $data['pais']
                     ]);
 
-
-                    Log::info('➡️ Consultando correo tienda...');
                     $resultTienda = $this->bigQuery->runQuery($queryTienda);
                     Log::info('✅ Consulta correo tienda completada');
+
                     $correoTienda = null;
                     foreach ($resultTienda->rows() as $row) {
-                        $correoTienda = $row['CORREO'];
+                        Log::info("📥 Resultado de correo tienda:", (array) $row);
+                        $correoTienda = $row['correo'] ?? $row['CORREO'] ?? null;
                     }
 
                     // === CONSULTAR correo jefe desde BigQuery ===
                     $queryJefe = $this->bigQuery->query(
-                        'SELECT CORREO FROM adoc-bi-dev.OPB.DIM_GERENTES
-                        WHERE PAIS = @pais'
+                        'SELECT CORREO_GERENTE FROM `adoc-bi-dev.DEV_OPB.dim_gerentes`
+                        WHERE BV_PAIS = @bv_pais'
                     )->parameters([
-                        'pais' => $data['pais']
+                        'bv_pais' => $data['pais']
                     ]);
 
                     Log::info('➡️ Consultando correo jefe...');
+                    Log::info("🔎 Buscando correo de jefe con:", [
+                        'BV_PAIS' => $data['pais'] // Usa el mismo prefijo que formaste para CRM_ID_TIENDA (SV, GT, etc.)
+                    ]);
                     $resultJefe = $this->bigQuery->runQuery($queryJefe);
                     Log::info('✅ Consulta correo jefe completada');
+
                     $correoJefe = null;
                     foreach ($resultJefe->rows() as $row) {
-                        $correoJefe = $row['CORREO'];
+                        Log::info("📥 Resultado de correo jefe:", (array) $row);
+                        $correoJefe = $row['CORREO_GERENTE'] ?? null;
                     }
 
                     // === CALCULAR PUNTUACIONES ===
