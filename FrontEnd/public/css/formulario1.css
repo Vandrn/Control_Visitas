@@ -246,7 +246,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 60px;
+    width: 75px;
     height: 45px;
     font-size: 18px;
     border: 2px solid #e6b200;
@@ -255,6 +255,9 @@ body {
     cursor: pointer;
     transition: background-color 0.3s, color 0.3s, transform 0.2s ease;
     user-select: none;
+    text-align: center;
+    white-space: normal;
+    padding: 0;
 }
 
 .radio-buttons label:hover {

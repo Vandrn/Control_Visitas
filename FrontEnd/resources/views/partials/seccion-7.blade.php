@@ -51,7 +51,7 @@
                 <label class="pregunta">{{ $numPregunta }}. Si existe algún punto adicional, por favor detallarlo acá (opcional)</label>
             </div>
             <div class="date-container">
-                <input type="text" name="PLAN_ADIC" placeholder="Plan de Acción opcional" class="opcional">
+                <input type="text" name="PLAN_03" placeholder="Plan de Acción opcional" class="opcional">
             </div>
         </div>
         @php $numPregunta++; @endphp
@@ -60,7 +60,7 @@
                 <label class="fechas">{{ $numPregunta }}. Fecha de cumplimiento meta para el punto adicional (opcional)</label>
             </div>
             <div class="date-container">
-                <input type="date" name="FECHA_PLAN_ADIC" class="opcional">
+                <input type="date" name="FECHA_PLAN_03" class="opcional">
             </div>
         </div>
     </div>

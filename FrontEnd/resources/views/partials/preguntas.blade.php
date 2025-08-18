@@ -13,6 +13,14 @@
     ];
     @endphp
 
+    @php
+    //Preguntas no aplicables por sección
+    $preguntasNoAplica = [
+    4 => [7, 8], // Producto
+    5 => [6, 7], // Personal
+    ];
+    @endphp
+
     @foreach ($preguntas as $index => $pregunta)
     @php
     $idPregunta = 'preg_' . str_pad($seccion, 2, '0', STR_PAD_LEFT) . '_' . str_pad($index + 1, 2, '0', STR_PAD_LEFT);
@@ -51,10 +59,15 @@
         @for ($i = 1; $i <= 5; $i++)
             <input type="radio" id="{{ $idPregunta }}_{{ $i }}" name="{{ $idPregunta }}" value="{{ $i }}" required>
             <label for="{{ $idPregunta }}_{{ $i }}">{{ $i }}</label>
-            @endfor
+        @endfor
+        @if (isset($preguntasNoAplica[(int)$seccion]) && in_array($index + 1, $preguntasNoAplica[(int)$seccion]))
+            <input type="radio" id="{{ $idPregunta }}_NA" name="{{ $idPregunta }}" value="NA">
+            <label for="{{ $idPregunta }}_NA">No aplica</label>
+        @endif
     </div>
 
-    @if (isset($preguntasConImagen[$seccion]) && in_array($index + 1, $preguntasConImagen[$seccion]))
+    <!--Imagen opcional para ciertas preguntas marcadas en azul-->
+    @if (isset($preguntasConImagen[(int)$seccion]) && in_array($index + 1, $preguntasConImagen[(int)$seccion]))
         <div class="input-imagen">
             <label for="{{ $nombreImagenIndividual }}" class="form-label">
                 Subir hasta 5 imágenes (opcional)

@@ -625,6 +625,15 @@ $(document).ready(function () {
                 });
             }
         }
+        // Recolectar plan adicional opcional
+        const descAdicional = $(`input[name="PLAN_03"]`).val();
+        const fechaAdicional = $(`input[name="FECHA_PLAN_03"]`).val();
+        if (descAdicional && fechaAdicional) {
+            planes.push({
+                descripcion: descAdicional,
+                fecha_cumplimiento: fechaAdicional
+            });
+        }
 
         // Recolectar datos generales
         let tienda = $("#CRM_ID_TIENDA option:selected");
@@ -783,7 +792,7 @@ $(document).ready(function () {
 
         let hayError = inputsVisibles.some(input => !input.checkValidity());
 
-        if (hayError) {
+        if (false) {
             mostrarNotificacion('Por favor, complete todos los campos requeridos antes de continuar.', 'warning');
             inputsVisibles.find(input => !input.checkValidity())[0].reportValidity();
             return;

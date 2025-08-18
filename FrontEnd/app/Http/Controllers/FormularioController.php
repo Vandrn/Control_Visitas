@@ -161,7 +161,6 @@ class FormularioController extends Controller
         foreach ($results->rows() as $row) {
             $tiendas[] = [
                 'TIENDA' => $row['TIENDA'],       // Solo NAME1, sin concatenación
-                'UBICACION' => $row['UBICACION'], // Guardado si lo necesitas internamente
                 'GEO' => $row['GEO'] ?? null
             ];
         }
