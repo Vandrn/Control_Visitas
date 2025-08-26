@@ -35,6 +35,13 @@ class DashboardController extends Controller
             $page = $request->get('page', 1);
             $perPage = config('admin.pagination.per_page', 20);
             $visitas = $this->usuario->getVisitasPaginadas($filtros, $page, $perPage, $user);
+            // Agregar conteo de imágenes a cada visita
+            foreach ($visitas as &$visita) {
+                $imagenes = $this->usuario->getImagenesVisita($visita['id'], $user['rol'] ?? null, $user['email'] ?? null);
+                $visita['imagenes'] = $imagenes;
+                $visita['total_imagenes'] = is_countable($imagenes) ? count($imagenes) : 0;
+            }
+            unset($visita);
             $totalVisitas = $this->usuario->contarVisitas($filtros, $user);
             $totalPages = ceil($totalVisitas / $perPage);
 

@@ -214,6 +214,9 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Puntuación
                         </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Imágenes
+                        </th>
                         <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Acciones
                         </th>
@@ -237,7 +240,9 @@
                             <div class="text-sm text-gray-500">{{ $visita['zona'] ?? 'N/A' }}</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {{ \Carbon\Carbon::parse($visita['fecha_hora_inicio'])->format('d/m/Y H:i') }}
+                            {{ \Carbon\Carbon::parse($visita['fecha_hora_inicio'], 'UTC')
+                                ->setTimezone(config('app.display_tz', 'America/El_Salvador'))
+                                ->format('d/m/Y H:i') }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             @if(isset($visita['puntuacion_general']) && $visita['puntuacion_general'])
@@ -253,15 +258,30 @@
                                         @else
                                         ☆
                                         @endif
-                                        @endfor
-                                        </div>
-                                        <span class="ml-2 text-sm {{ $colorClass }}">
-                                            {{ number_format($puntuacion * 5, 1) }}
-                                        </span>
+                                    @endfor
                                 </div>
-                                @else
-                                <span class="text-gray-400">N/A</span>
-                                @endif
+                                <span class="ml-2 text-sm {{ $colorClass }}">
+                                    {{ number_format($puntuacion * 5, 1) }}
+                                </span>
+                            </div>
+                            @else
+                            <span class="text-gray-400">N/A</span>
+                            @endif
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            @php
+                            $totalImagenes = 0;
+                            if (is_array($visita['imagenes'] ?? [])) {
+                                foreach ($visita['imagenes'] as $seccion) {
+                                    if (isset($seccion['imagenes']) && is_array($seccion['imagenes'])) {
+                                        $totalImagenes += count($seccion['imagenes']);
+                                    }
+                                }
+                            }
+                            @endphp
+                            <span class="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold">
+                                {{ $totalImagenes }}
+                            </span>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div class="flex justify-end space-x-2">

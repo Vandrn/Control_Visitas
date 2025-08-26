@@ -202,16 +202,11 @@ function generateKpiIcon($cumplimiento) {
                             default => 'fa-chart-line'
                         };
 
-                        $codigoMap = [
-                            'operaciones' => 1,
-                            'administracion' => 2,
-                            'producto' => 3,
-                            'personal' => 4,
-                        ];
+                        // $codigoMap eliminado, ahora se usa el nombre del área directamente en el enlace
                     @endphp
 
                     @if($seccion !== 'kpis')
-                        <a href="{{ route('detalle.area', ['id' => $visita['id'], 'seccion' => $codigoMap[$seccion] ?? '']) }}"
+                        <a href="{{ url('admin/visita/' . $visita['id'] . '/area/' . $seccion) }}"
                         class="block bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200 text-inherit no-underline">
                     @else
                         <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow duration-200">

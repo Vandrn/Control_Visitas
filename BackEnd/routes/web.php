@@ -64,7 +64,7 @@ Route::middleware(['admin.auth'])->group(function () {
     Route::get('/admin/visita/{id}/imagenes', [VisitaController::class, 'imagenes'])->name('admin.visita.imagenes');
 
     /** Detalle de área específica dentro de una visita **/
-    Route::get('/admin/visitas/{id}/area/{seccion}', [VisitaController::class, 'detalleArea'])->name('detalle.area');
+    Route::get('/admin/visita/{id}/area/{seccion}', [VisitaController::class, 'detalleArea'])->name('detalle.area');
     
     /** API interna para tabla de visitas con filtros AJAX **/
     Route::get('/admin/api/visitas', [DashboardController::class, 'getVisitas'])->name('admin.api.visitas');

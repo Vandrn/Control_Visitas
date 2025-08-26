@@ -415,29 +415,42 @@ class VisitaController extends Controller
         // 3️⃣ Procesar visita
         $visita = $this->usuario->procesarDatosVisita($visitaRaw);
 
-        // 4️⃣ Filtrar sección deseada
+        // 4️⃣ Obtener textos de preguntas
+        $textosPreguntas = $this->getTextosPreguntas();
+
+        // 5️⃣ Filtrar sección deseada por nombre
         $secciones = $visita['secciones'] ?? [];
-        $areaSeleccionada = collect($secciones)->firstWhere('codigo_seccion', $seccion);
+        Log::info('[detalleArea] Áreas disponibles en la visita', [
+            'id' => $id,
+            'seccion_param' => $seccion,
+            'secciones_disponibles' => array_map(function($area) {
+                return $area['nombre_seccion'] ?? '';
+            }, $secciones)
+        ]);
+        $areaSeleccionada = collect($secciones)->firstWhere(function($area) use ($seccion) {
+            // Normaliza para evitar problemas de mayúsculas/minúsculas y espacios
+            $nombre = strtolower(str_replace(' ', '', $area['nombre_seccion'] ?? ''));
+            $buscado = strtolower(str_replace(' ', '', $seccion));
+            return $nombre === $buscado;
+        });
 
         if (!$areaSeleccionada) {
+            $seccionesDisponibles = array_map(function($area) {
+                return $area['nombre_seccion'] ?? '';
+            }, $secciones);
+            Log::error("[detalleArea] Área no encontrada: {$seccion} | Secciones disponibles: " . implode(', ', $seccionesDisponibles), [
+                'id' => $id,
+                'seccion_param' => $seccion,
+                'secciones_disponibles' => $seccionesDisponibles
+            ]);
             abort(404, 'Área no encontrada');
         }
 
         return view('admin.visitas.detalle_area', [
             'area' => $areaSeleccionada,
-            'titulo' => $this->obtenerNombreSeccion($seccion)
+            'titulo' => ucfirst($seccion),
+            'textosPreguntas' => $textosPreguntas,
+            'idVisita' => $id
         ]);
-    }
-
-    // Puedes tener un helper privado:
-    private function obtenerNombreSeccion($codigo)
-    {
-        return match ($codigo) {
-            1 => 'Operaciones',
-            2 => 'Administración',
-            3 => 'Producto',
-            4 => 'Personal',
-            default => 'Área desconocida'
-        };
     }
 }

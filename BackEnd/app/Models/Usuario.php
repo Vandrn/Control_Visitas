@@ -507,16 +507,14 @@ class Usuario
             ];
 
             foreach ($seccion['preguntas'] as $pregunta) {
-                $preguntas[$pregunta['codigo_pregunta']] = [
-                    'respuesta' => $pregunta['respuesta'],
-                    'observaciones' => $pregunta['observaciones'] ?? null,
-                    'texto_pregunta' => $pregunta['texto_pregunta'] ?? '',
-                    'imagenes' => $pregunta['imagenes'] ?? [],
-                    'codigo_pregunta' => $pregunta['codigo_pregunta']
-                ];
+                if (isset($pregunta['imagenes']) && is_array($pregunta['imagenes']) && count($pregunta['imagenes']) > 0) {
+                    foreach ($pregunta['imagenes'] as $img) {
+                        $imagenes[$nombre]['imagenes'][] = $img;
+                    }
+                }
             }
 
-            // Eliminar si no hay imágenes
+            // Eliminar la sección si no tiene imágenes
             if (empty($imagenes[$nombre]['imagenes'])) {
                 unset($imagenes[$nombre]);
             }
@@ -548,7 +546,7 @@ class Usuario
             'secciones' => []
         ];
 
-        // Reordenar secciones por nombre
+        // Reordenar secciones por nombre y también como array para tarjetas
         foreach ($visita['secciones'] as $seccion) {
             $nombre = $seccion['nombre_seccion'];
             $preguntas = [];
@@ -556,14 +554,21 @@ class Usuario
             foreach ($seccion['preguntas'] as $pregunta) {
                 $codigo = $pregunta['codigo_pregunta'];
                 $preguntas[$codigo] = [
+                    'codigo_pregunta' => $codigo,
                     'respuesta' => $pregunta['respuesta'],
                     'imagenes' => $pregunta['imagenes'] ?? []
                 ];
             }
 
-            // Agrupado por nombre de sección
+            // Agrupado por nombre de sección (acceso rápido por nombre)
             $resultado[$nombre] = [
                 'preguntas' => $preguntas
+            ];
+
+            // También como array para las tarjetas y el detalle
+            $resultado['secciones'][] = [
+                'nombre_seccion' => $nombre,
+                'preguntas' => array_values($preguntas) // Para que sea un array indexado y el foreach del Blade funcione
             ];
         }
 
@@ -690,64 +695,70 @@ class Usuario
      */
     public function validarDistanciaVisita($visitaData)
     {
-        // Extraer ubicación del usuario desde la visita
+        // Extraer ubicación del usuario y de la tienda
         $ubicacionUsuario = $visitaData['ubicacion'] ?? null;
         $coordenadasTienda = $visitaData['TIENDA_COORDENADAS'] ?? null;
 
-        if (!$ubicacionUsuario || !$coordenadasTienda) {
+        // Siempre parsear coordenadas de tienda si existen
+        $coordsTienda = null;
+        if ($coordenadasTienda) {
+            $parts = explode(',', $coordenadasTienda);
+            if (count($parts) === 2) {
+                $coordsTienda = [
+                    'lat' => floatval(trim($parts[0])),
+                    'lng' => floatval(trim($parts[1])),
+                ];
+            }
+        }
+
+        // Si falta usuario o tienda => retornar error, pero incluir tienda
+        if (!$ubicacionUsuario || !$coordenadasTienda || !$coordsTienda) {
             return [
-                'valida' => false,
-                'distancia' => null,
-                'mensaje' => '⚠️ No se encontraron coordenadas para validar',
-                'estado' => 'sin_datos'
+                'valida'        => false,
+                'distancia'     => null,
+                'mensaje'       => '⚠️ No se encontraron coordenadas de usuario para validar',
+                'estado'        => 'sin_datos',
+                'coords_usuario'=> null,
+                'coords_tienda' => $coordsTienda, // <- siempre se manda
             ];
         }
 
-        // Parsear coordenadas del usuario (formato: "lat,lng")
+        // Parsear coordenadas de usuario
         $coordsUsuario = explode(',', $ubicacionUsuario);
         if (count($coordsUsuario) !== 2) {
             return [
-                'valida' => false,
-                'distancia' => null,
-                'mensaje' => '⚠️ Formato de ubicación de usuario inválido',
-                'estado' => 'error'
-            ];
-        }
-
-        // Parsear coordenadas de la tienda (formato: "lat,lng")
-        $coordsTienda = explode(',', $coordenadasTienda);
-        if (count($coordsTienda) !== 2) {
-            return [
-                'valida' => false,
-                'distancia' => null,
-                'mensaje' => '⚠️ Formato de coordenadas de tienda inválido',
-                'estado' => 'error'
+                'valida'        => false,
+                'distancia'     => null,
+                'mensaje'       => '⚠️ Formato de ubicación de usuario inválido',
+                'estado'        => 'error',
+                'coords_usuario'=> null,
+                'coords_tienda' => $coordsTienda,
             ];
         }
 
         $latUsuario = floatval(trim($coordsUsuario[0]));
         $lngUsuario = floatval(trim($coordsUsuario[1]));
-        $latTienda = floatval(trim($coordsTienda[0]));
-        $lngTienda = floatval(trim($coordsTienda[1]));
+        $latTienda  = $coordsTienda['lat'];
+        $lngTienda  = $coordsTienda['lng'];
 
         // Calcular distancia
         $distancia = $this->calcularDistancia($latUsuario, $lngUsuario, $latTienda, $lngTienda);
         $distanciaRedondeada = round($distancia);
 
-        // Determinar validez (≤ 50 metros = válida)
         $esValida = $distanciaRedondeada <= 50;
 
         return [
-            'valida' => $esValida,
-            'distancia' => $distanciaRedondeada,
-            'mensaje' => $esValida
+            'valida'        => $esValida,
+            'distancia'     => $distanciaRedondeada,
+            'mensaje'       => $esValida
                 ? "✅ Visita válida: {$distanciaRedondeada} metros de la tienda"
                 : "❌ Visita sospechosa: {$distanciaRedondeada} metros de la tienda (muy lejos)",
-            'estado' => $esValida ? 'valida' : 'invalida',
-            'coords_usuario' => ['lat' => $latUsuario, 'lng' => $lngUsuario],
-            'coords_tienda' => ['lat' => $latTienda, 'lng' => $lngTienda]
+            'estado'        => $esValida ? 'valida' : 'invalida',
+            'coords_usuario'=> ['lat' => $latUsuario, 'lng' => $lngUsuario],
+            'coords_tienda' => $coordsTienda, // <- garantizado siempre
         ];
     }
+
 
     /**
      * 📍 Obtener validación de distancia para una visita específica
