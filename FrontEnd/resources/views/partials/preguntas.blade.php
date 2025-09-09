@@ -70,7 +70,7 @@
     @if (isset($preguntasConImagen[(int)$seccion]) && in_array($index + 1, $preguntasConImagen[(int)$seccion]))
         <div class="input-imagen">
             <label for="{{ $nombreImagenIndividual }}" class="form-label">
-                Subir hasta 5 imágenes (opcional)
+                Subir al menos 1 imagen (obligatorio, máximo 5)
             </label>
             <input
                 type="file"
@@ -78,6 +78,7 @@
                 id="{{ $nombreImagenIndividual }}"
                 multiple
                 accept="image/*"
+                required
             >
         </div>
     @endif

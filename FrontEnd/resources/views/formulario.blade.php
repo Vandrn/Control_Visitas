@@ -81,11 +81,6 @@
     <div class="formulario">
         <form onsubmit="return false;" method="POST" enctype="multipart/form-data">
             @csrf
-            <br>
-            <br>
-            <br>
-            <br>
-            <br>
             @include('partials.datos')
             @include ('partials.seccion-1')
             @include ('partials.largas')

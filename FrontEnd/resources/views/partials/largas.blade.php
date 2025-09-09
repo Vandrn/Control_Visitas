@@ -69,7 +69,7 @@ $secciones = [
 <!-- Introducción de la Sección -->
 <div id="intro-{{ $seccion['seccion'] }}" class="introduccion" style="display: none;">
     <h2 class="titulo-intro">Elementos a evaluar del área de {{ $seccion['titulo'] }}</h2>
-    <p>Evalúe los siguientes elementos en la tienda del 1 al 5, siendo 1 el peor y 5 el mejor.</p><br><br><br><br><br><br>
+    <p>Evalúe los siguientes elementos en la tienda del 1 al 5, siendo 1 el peor y 5 el mejor.</p>
     <button type="button" class="boton btnEmpezar" data-seccion="{{ $seccion['seccion'] }}">Empezar</button>
 </div>
 

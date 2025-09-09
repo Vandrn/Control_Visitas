@@ -1,4 +1,56 @@
 $(document).ready(function () {
+    // Modalidad: Virtual o Presencial
+    let modalidadSeleccionada = '';
+    $(document).on('click', '.modalidad-btn', function() {
+        $('.modalidad-btn').removeClass('modalidad-activa');
+        $(this).addClass('modalidad-activa');
+        modalidadSeleccionada = $(this).data('modalidad');
+        $('#modalidad_visita').val(modalidadSeleccionada);
+        // Habilitar botón continuar solo si hay correo y modalidad
+        checarHabilitarContinuar();
+    });
+
+    // Habilitar botón continuar solo si hay correo y modalidad
+    function checarHabilitarContinuar() {
+        let correoValido = false;
+        var sel = $("#correo_tienda_select");
+        if (sel.length && sel.val() === 'otro') {
+            correoValido = $("#correo_tienda_otro").val().match(/^[a-zA-Z0-9._%+-]+@empresasadoc\.com$/);
+        } else if (sel.length) {
+            correoValido = !!sel.val();
+        } else {
+            correoValido = $("#correo_tienda").val().match(/^[a-zA-Z0-9._%+-]+@empresasadoc\.com$/);
+        }
+    }
+
+    // Validar correo y modalidad al cambiar
+    $('#correo_tienda_select, #correo_tienda_otro').on('input change', checarHabilitarContinuar);
+
+    // Estilo para botón activo
+    $('<style>.modalidad-activa{background:#e6b200;color:#fff;box-shadow:0 2px 8px #e6b20080;}</style>').appendTo('head');
+    // Mostrar/ocultar input de correo 'otro' según selección
+    var selectCorreo = document.getElementById('correo_tienda_select');
+    var inputCorreoOtro = document.getElementById('correo_tienda_otro');
+    if (selectCorreo && inputCorreoOtro) {
+        selectCorreo.addEventListener('change', function() {
+            if (this.value === 'otro') {
+                inputCorreoOtro.style.display = '';
+                inputCorreoOtro.required = true;
+            } else {
+                inputCorreoOtro.style.display = 'none';
+                inputCorreoOtro.required = false;
+                inputCorreoOtro.value = '';
+            }
+        });
+        // Inicializar estado al cargar
+        if (selectCorreo.value === 'otro') {
+            inputCorreoOtro.style.display = '';
+            inputCorreoOtro.required = true;
+        } else {
+            inputCorreoOtro.style.display = 'none';
+            inputCorreoOtro.required = false;
+        }
+    }
 
     let dataSaved = false;
 
@@ -7,7 +59,7 @@ $(document).ready(function () {
     let subidaEnProceso = false;
 
     // 📍 FUNCIÓN PARA CALCULAR DISTANCIA ENTRE DOS COORDENADAS (Haversine)
-    /*function calcularDistancia(lat1, lng1, lat2, lng2) {
+    function calcularDistancia(lat1, lng1, lat2, lng2) {
         const R = 6371000; // Radio de la Tierra en metros
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -18,7 +70,7 @@ $(document).ready(function () {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c; // Distancia en metros
     }
-    
+
     // 📱 OBTENER UBICACIÓN DEL USUARIO
     function obtenerUbicacionUsuario() {
         return new Promise((resolve, reject) => {
@@ -32,7 +84,7 @@ $(document).ready(function () {
                 reject(new Error('Geolocalización no soportada'));
             }
         });
-    }*/
+    }
 
     // Obtener ubicación al cargar la página
     if (navigator.geolocation) {
@@ -100,7 +152,7 @@ $(document).ready(function () {
                     });
 
                     // 📍 AGREGAR EVENTO PARA VALIDAR DISTANCIA
-                    //$('#CRM_ID_TIENDA').off('change.distancia').on('change.distancia', validarDistanciaTienda);
+                    $('#CRM_ID_TIENDA').off('change.distancia').on('change.distancia', validarDistanciaTienda);
                 } else {
                     console.error("La respuesta no es un array:", data);
                 }
@@ -242,7 +294,6 @@ $(document).ready(function () {
             mostrarIndicadorSubida($input, false, fieldName);
         }
     }
-
     /**
      * Comprimir imagen en el cliente antes de subir
      */
@@ -320,38 +371,37 @@ $(document).ready(function () {
      * Subir imagen ya comprimida al servidor
      */
     async function subirImagenComprimida(imagenBlob, fieldName, $input) {
-        try {
-            const formData = new FormData();
-            formData.append('image', imagenBlob, `${fieldName}.jpg`);
-            formData.append('field_name', fieldName);
-
-            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-            const response = await fetch('/retail/subir-imagen-incremental', {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': token
-                },
-                body: formData
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.success) {
-                console.log(`✅ Imagen subida: ${fieldName} -> ${result.url}`);
-                mostrarNotificacion(`✅ ${fieldName} subida correctamente`, 'success');
-
-                // Mostrar preview
-                mostrarPreviewImagen($input, result.url, fieldName);
-
-                return result.url;
-            } else {
-                throw new Error(result.error || 'Error desconocido');
-            }
-        } catch (error) {
-            console.error('Error en subida:', error);
-            throw error;
+      try {
+        const formData = new FormData();
+        formData.append('image', imagenBlob, `${fieldName}.jpg`);
+        formData.append('field_name', fieldName);
+    
+        const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    
+        const response = await fetch('/retail/subir-imagen-incremental', {
+          method: 'POST',
+          headers: {
+            'X-CSRF-TOKEN': token,
+            'Accept': 'application/json'
+          },
+          body: formData,
+          credentials: 'same-origin'
+        });
+    
+        const result = await response.json();
+    
+        if (response.ok && result.success) {
+          console.log(`✅ Imagen subida: ${fieldName} -> ${result.url}`);
+          mostrarNotificacion(`✅ ${fieldName} subida correctamente`, 'success');
+          mostrarPreviewImagen($input, result.url, fieldName);
+          return result.url;
+        } else {
+          throw new Error(result.error || 'Error desconocido');
         }
+      } catch (error) {
+        console.error('Error en subida:', error);
+        throw error;
+      }
     }
 
     /**
@@ -635,12 +685,22 @@ $(document).ready(function () {
             });
         }
 
+
         // Recolectar datos generales
         let tienda = $("#CRM_ID_TIENDA option:selected");
         let pais = $("#pais option:selected").data("nombre");
         let datosFinales = {
             session_id: crypto.randomUUID(),
-            correo_realizo: $("#correo_tienda").val(),
+            correo_realizo: (function() {
+                var sel = $("#correo_tienda_select");
+                if (sel.length && sel.val() === 'otro') {
+                    return $("#correo_tienda_otro").val();
+                } else if (sel.length) {
+                    return sel.val();
+                } else {
+                    return $("#correo_tienda").val();
+                }
+            })(),
             lider_zona: $("#jefe_zona").val(),
             tienda: tienda.val() + " - " + tienda.data("ubicacion"),
             ubicacion: $("#ubicacion").val(),
@@ -648,6 +708,7 @@ $(document).ready(function () {
             zona: $("#zona").val(),
             fecha_hora_inicio: $("#fecha_inicio").val(),
             fecha_hora_fin: new Date().toISOString(),
+            modalidad_visita: $('#modalidad_visita').val(),
             secciones: Object.entries(seccionesMap).map(([nombre, preguntas]) => ({
                 nombre_seccion: nombre,
                 preguntas: preguntas
@@ -659,24 +720,14 @@ $(document).ready(function () {
         console.log("📦 Estructura final lista para enviar:", datosFinales);
         return datosFinales;
     }
-
     function guardarSeccion(datos) {
+
         if (!datos) return;
 
-        // 🆕 ENVÍO SOLO DE DATOS DE TEXTO (SIN ARCHIVOS)
-        let formData = new FormData();
-
-        // Solo agregar campos de texto, números y URLs
-        for (let key in datos) {
-            if (datos[key] !== null && datos[key] !== undefined) {
-                // ✅ Las URLs de imágenes ya están en datos[key]
-                formData.append(key, datos[key]);
-            }
-        }
+        // Mostrar el JSON final que se enviará al backend
+        console.log('📦 JSON final a enviar al backend:', JSON.stringify(datos, null, 2));
 
         const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-        console.log('📤 Enviando formulario final (SOLO URLs de imágenes, NO archivos)...');
 
         // 🚫 MOSTRAR RESUMEN DE IMÁGENES ANTES DE ENVIAR
         const imagenesResumen = Object.keys(imagenesSubidas).length;
@@ -688,17 +739,27 @@ $(document).ready(function () {
         }
 
         fetch('/retail/guardar-seccion', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': token
-            },
-            body: JSON.stringify(datos),
-        }).then(response => {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': token,
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(datos),
+          credentials: 'same-origin'
+        }).then(async response => {
             if (response.ok) {
                 return response.json();
             } else {
-                throw new Error("Error al guardar: " + response.status);
+                // Intentar extraer el mensaje de error del backend
+                let errorMsg = "Error al guardar: " + response.status;
+                try {
+                    const data = await response.json();
+                    if (data && data.error) {
+                        errorMsg = data.error;
+                    }
+                } catch (e) {}
+                throw new Error(errorMsg);
             }
         })
             .then(data => {
@@ -711,7 +772,7 @@ $(document).ready(function () {
             })
             .catch(error => {
                 console.error("❌ Error al enviar los datos:", error);
-                mostrarNotificacion('❌ Error al enviar el formulario', 'error');
+                mostrarNotificacion('❌ ' + (error.message || 'Error al enviar el formulario'), 'error');
             });
     }
 
@@ -722,13 +783,74 @@ $(document).ready(function () {
         let inputsVisibles = seccionActual.find("input, select, textarea").filter(function () {
             return $(this).is(":visible") && !$(this).is(":disabled");
         }).toArray();
+        
+        // Validar que haya modalidad seleccionada
+        if (!modalidadSeleccionada) {
+            return mostrarNotificacion("Seleccione la modalidad de la visita.", 'warning');
+        }
 
-        if (!$("#correo_tienda").val().includes('@') && indiceActual === secciones.indexOf("datos"))
-            return mostrarNotificacion("Ingrese un correo válido.", 'warning');
-
+        // Validar correo según el nuevo select/input
+        if (indiceActual === secciones.indexOf("datos")) {
+            var correo = (function() {
+                var sel = $("#correo_tienda_select");
+                if (sel.length && sel.val() === 'otro') {
+                    return $("#correo_tienda_otro").val();
+                } else if (sel.length) {
+                    return sel.val();
+                } else {
+                    return $("#correo_tienda").val();
+                }
+            })();
+            if (!correo || !correo.match(/^[a-zA-Z0-9._%+-]+@empresasadoc\.com$/)) {
+                return mostrarNotificacion("Ingrese un correo válido.", 'warning');
+            }
+        }
+        
         // Verificar que no haya subidas en proceso antes de continuar
         if (subidaEnProceso) {
             mostrarNotificacion('⏳ Por favor espere a que termine la subida de la imagen', 'warning');
+            return;
+        }
+        
+        // Guardar modalidad en variable global para otras secciones
+        window.__modalidad_visita = modalidadSeleccionada;
+        // 🆕 VALIDACIÓN DE IMÁGENES REQUERIDAS EN CADA SECCIÓN
+        // Busca inputs file visibles y requeridos en la sección actual
+        let imagenesFaltantes = [];
+        seccionActual.find("input[type='file'][required]").each(function (idx) {
+            const input = this;
+            const fieldName = input.name.replace(/\[\]$/, '');
+            let falta = false;
+            if (input.files.length === 0) {
+                falta = true;
+            } else {
+                const imagenesAsociadas = Object.keys(imagenesSubidas).filter(k => k.startsWith(fieldName));
+                if (imagenesAsociadas.length === 0) {
+                    falta = true;
+                }
+            }
+            if (falta) {
+                // Buscar label asociada
+                let label = $(input).closest('.form-group, .mb-4, .mb-3').find('label').first().text().trim();
+                if (!label) {
+                    // Si no hay label, usar placeholder si existe
+                    if (input.placeholder) {
+                        label = input.placeholder;
+                    } else {
+                        // Si no hay placeholder, extraer número de la pregunta del nombre técnico
+                        let match = fieldName.match(/(\d{2,})$/);
+                        if (match) {
+                            label = `Pregunta ${parseInt(match[1], 10)}`;
+                        } else {
+                            label = fieldName;
+                        }
+                    }
+                }
+                imagenesFaltantes.push(label);
+            }
+        });
+        if (imagenesFaltantes.length > 0) {
+            mostrarNotificacion(`⚠️ Debe subir la(s) imagen(es) requerida(s):<br>${imagenesFaltantes.map(txt => `⚠️ ${txt}`).join('<br>')}`, 'warning');
             return;
         }
 
@@ -786,13 +908,13 @@ $(document).ready(function () {
             dataSaved = true;
 
             mostrarNotificacion(`¡Formulario completado! Se enviaron ${totalImagenes} imágenes correctamente.`, 'success');
-            //window.location.replace("/formulario");
+            //window.location.replace("/retail/formulario");
             return;
         }
 
         let hayError = inputsVisibles.some(input => !input.checkValidity());
 
-        if (false) {
+        if (hayError) {
             mostrarNotificacion('Por favor, complete todos los campos requeridos antes de continuar.', 'warning');
             inputsVisibles.find(input => !input.checkValidity())[0].reportValidity();
             return;
@@ -823,7 +945,6 @@ $(document).ready(function () {
 
         mostrarSeccion(++indiceActual);
     });
-
     $(".btnEmpezar1").click(function () {
         indiceActual = secciones.indexOf("datos");
         mostrarSeccion(indiceActual);
@@ -945,6 +1066,11 @@ $(document).ready(function () {
 
     // 🎯 VALIDAR DISTANCIA CUANDO CAMBIA LA TIENDA
     async function validarDistanciaTienda() {
+        // Si la modalidad es virtual, no mostrar mensaje de distancia
+        if (window.__modalidad_visita === 'virtual') {
+            $('#mensaje-distancia').remove();
+            return;
+        }
         const tiendaSelect = document.getElementById('CRM_ID_TIENDA');
         const selectedOption = tiendaSelect.options[tiendaSelect.selectedIndex];
 
@@ -1034,9 +1160,9 @@ $(document).ready(function () {
     // 🔄 Mantener sesión activa cada 3 minutos con alerta si se pierde
     let intentosFallidosSesion = 0;
     const limiteFallosSesion = 2; // Al segundo fallo consecutivo, muestra alerta
-
+    
     setInterval(() => {
-        fetch('/keep-alive', {
+        fetch('/retail/keep-alive', {
             method: 'GET',
             credentials: 'same-origin'
         }).then(response => {
@@ -1048,7 +1174,7 @@ $(document).ready(function () {
         }).catch((err) => {
             intentosFallidosSesion++;
             console.warn(`⚠️ Intento fallido ${intentosFallidosSesion}:`, err);
-
+    
             if (intentosFallidosSesion >= limiteFallosSesion) {
                 mostrarNotificacion('⚠️ Tu sesión ha expirado o no se pudo renovar. Por favor recarga la página.', 'warning');
             }

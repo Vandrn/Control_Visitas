@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manual de Usuario - Control Visitas Gerente Retail</title>
+    <style>
+      :root {
+        --adoc-yellow: #ffc300;
+        --adoc-gray: #444444;
+        --background: #f8f9fa;
+        --white: #ffffff;
+        --border: #e2e8f0;
+        --text-main: #2d3748;
+        --text-sub: #4a5568;
+        --radius: 12px;
+        --shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        --alert-info: #e6f3ff;
+        --alert-success: #e8f5e9;
+        --alert-error: #ffe6e6;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        background: var(--background);
+        margin: 0;
+        padding: 2rem;
+        color: var(--text-main);
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: auto;
+        background: var(--white);
+        border-radius: var(--radius);
+        padding: 2rem;
+        box-shadow: var(--shadow);
+      }
+
+      h1,
+      h2 {
+        color: var(--adoc-gray);
+      }
+
+      h1 {
+        font-size: 2.2rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .highlight {
+        background: var(--adoc-yellow);
+        padding: 0.25rem 0.75rem;
+        border-radius: 6px;
+        font-weight: bold;
+        display: inline-block;
+        margin-bottom: 1rem;
+      }
+
+      .section {
+        margin-bottom: 2rem;
+        background: var(--white);
+        border-left: 6px solid var(--adoc-yellow);
+        padding: 1.5rem;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+      }
+
+      .section h2 {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .section p,
+      .section ul {
+        font-size: 1rem;
+        color: var(--text-sub);
+      }
+
+      .section ul {
+        padding-left: 1.5rem;
+      }
+
+      .step {
+        border-left: 4px solid var(--adoc-yellow);
+        padding-left: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .step img {
+        max-width: 100%;
+        border-radius: var(--radius);
+        margin-top: 0.5rem;
+      }
+
+      .alert-info {
+        background: var(--alert-info);
+        padding: 1rem;
+        border-left: 4px solid #4299e1;
+        border-radius: var(--radius);
+        margin-top: 1rem;
+      }
+
+      .alert-success {
+        background: var(--alert-success);
+        padding: 1rem;
+        border-left: 4px solid #28a745;
+        border-radius: var(--radius);
+        margin-top: 1rem;
+      }
+
+      .alert-error {
+        background: var(--alert-error);
+        padding: 1rem;
+        border-left: 4px solid #e60000;
+        border-radius: var(--radius);
+        margin-top: 1rem;
+        color: #800000;
+      }
+
+      .section-title {
+        background: var(--adoc-yellow);
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius);
+        color: var(--text-main);
+        font-weight: bold;
+        margin-bottom: 1rem;
+        font-size: 1.1rem;
+      }
+
+      .img-ubicacion {
+        max-width: 400px;
+        width: 25%;
+        height: auto;
+        display: block;
+        margin: 1rem auto;
+        border-radius: 10px;
+      }
+
+      img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 1rem auto;
+        border-radius: var(--radius);
+      }
+
+      .section-finalizar img {
+        max-width: 500px; /* Ajusta según tu diseño */
+        width: 100%;
+        height: auto;
+        display: block;
+        margin: 1rem auto;
+      }
+
+      .top-right-alert {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        background: var(--alert-error);
+        padding: 1rem 1.5rem;
+        border-radius: var(--radius);
+        border-left: 6px solid #cc0000;
+        color: #800000;
+        box-shadow: var(--shadow);
+        z-index: 9999;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>📋 Manual de Usuario</h1>
+      <div class="highlight">Control Visitas Gerente Retail</div>
+
+      <div class="section">
+        <div class="section-title">¿Qué es esta aplicación?</div>
+        <p>
+          La herramienta permite registrar visitas a tiendas, evaluando áreas
+          clave como operaciones, administración, producto, personal y KPIs, con
+          planes de mejora.
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section-title">¿Quién debe usarla?</div>
+        <ul>
+          <li>Gerentes Retail</li>
+          <li>Líderes de zona</li>
+        </ul>
+        <p>
+          El objetivo es asegurar la calidad y consistencia en todas las
+          tiendas.
+        </p>
+        <div class="step">
+          <p>Ingrese a la URL oficial del formulario
+            desde navegador moderno:
+            <a href="https://adocencuesta.com/retail/formulario" target="_blank"
+              >https://adocencuesta.com/retail/formulario</a
+            >
+          </p>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Correo corporativo obligatorio</div>
+        <p>
+          Antes de seleccionar país, zona o tienda, deberá seleccionar su correo
+          de la lista desplegable.
+        </p>
+        <img src="imagenes/correo.png" alt="Selección de correo" />
+        <p>
+          En el caso de que no aparezca su correo, seleccione la opción
+          <strong>Otro... </strong>debe de ser un correo válido de la persona
+          que realiza la visita. Este correo debe ser del dominio
+          <strong>@empresasadoc.com</strong>. Si se ingresa un correo diferente,
+          el sistema no permitirá continuar con el formulario.
+        </p>
+        <img src="imagenes/otro.png" alt="Selección de correo otro" />
+      </div>
+
+      <div class="section">
+        <div class="section-title">Modalidad de visita</div>
+        <p>
+          Seleccione la modalidad de la visita que va a realizar, puede ser
+          <strong>Presencial</strong> o <strong>Virtual</strong>.
+        </p>
+        <img src="imagenes/modalidad.png" alt="Selección de modalidad" />
+        <p>
+          Si selecciona la modalidad <strong>Virtual</strong>, no se solicitará
+          el permiso de ubicación y no se validará la distancia a la tienda.
+        </p>
+        <div class="alert-error">
+          ⚠️ Solo se debe seleccionar <strong> Virtual</strong> en el caso que
+          usted tenga permiso del Gerente País que se hará una visita virtual
+          respaldada con correo, de lo contrario está no contará para su meta.
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Acceso a la ubicación</div>
+        <div class="step">
+          <div class="alert-success">
+            Antes de iniciar el formulario asegurese de tener una buena y
+            estable conexión a Internet puede conectarse al internet de la
+            tienda para que no haya ninguna dificultad en el desarrollo de la
+            encuesta.
+          </div>
+          <p>
+            En el caso de las visitas presenciales: Al iniciar el formulario, se
+            solicitará permiso para acceder a la ubicación. Es importante
+            aceptar este permiso para validar la distancia entre la persona que
+            realiza la visita y la tienda seleccionada.
+          </p>
+          <img
+            src="imagenes/permiso.png"
+            alt="Mensaje de distancia a tienda"
+            class="img-ubicacion"
+          />
+          <ul>
+            <li>
+              Se mostrará la distancia aproximada en metros desde la ubicación
+              actual hasta la tienda.
+            </li>
+            <li>
+              Si la persona se encuentra lejos de la tienda, se mostrará un
+              mensaje de advertencia en la parte inferior del formulario.
+            </li>
+            <img
+              src="imagenes/ubicacion.png"
+              alt="Mensaje de distancia a tienda"
+            />
+          </ul>
+          <div class="alert-info">
+            💡 Consejo: Si usted está en la tienda y aparece que está lejos,
+            intente estos pasos:
+            <ul>
+              <li>Verifique que el GPS de su dispositivo esté activado.</li>
+              <li>
+                Si está activado, entonces apague el GPS y cierre el formulario.
+              </li>
+              <li>Espere unos segundos.</li>
+              <li>Vuelva a encender el GPS y abra otra vez el formulario.</li>
+            </ul>
+          </div>
+          <div class="alert-error">
+            ⚠️ Si usted se encuentra en la tienda y ya realizo los pasos
+            anteriores y aún sigue marcando que está lejos, por favor contacte a
+            <a href="mailto:vanessa.duran@empresasadoc.com"
+              >vanessa.duran@empresasadoc.com</a
+            >
+            y continue con la encuesta.
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Selección de Tienda</div>
+        <div class="step">
+          <p><strong>Paso 1:</strong> Seleccione el país.</p>
+          <img
+            src="imagenes/pais.png"
+            alt="Seleccion de país"
+          />
+        </div>
+        <div class="step">
+          <p><strong>Paso 2:</strong> Seleccione la zona.</p>
+          <img
+            src="imagenes/zona.png"
+            alt="Seleccion de zona"
+          />
+        </div>
+        <div class="step">
+          <p><strong>Paso 3:</strong> Seleccione la tienda.</p>
+          <img
+            src="imagenes/tienda.png"
+            alt="Seleccion de tienda"
+          />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Secciones</div>
+        <div class="step">
+          <p>
+            <strong>Operaciones:</strong> Califique de 1 a 5, suba imágenes y
+            agregue observaciones relevantes.
+          </p>
+        </div>
+        <div class="step">
+          <p>
+            <strong>Administración:</strong> Igual que operaciones, pero
+            enfocado en gestión administrativa.
+          </p>
+        </div>
+        <div class="step">
+          <p>
+            <strong>Producto:</strong> Evalúe visibilidad, surtido y condiciones
+            del producto.
+          </p>
+        </div>
+        <div class="step">
+          <p>
+            <strong>Personal:</strong> Evalúe presentación, actitud y atención
+            del personal.
+          </p>
+        </div>
+        <div class="alert-info">
+          💡 Todas las respuestas son obligatorias. En las preguntas que aceptan imagenes,
+          al menos una imagen es obligaria, si no se sube ninguna imagen, mostrará un mensaje en la
+          parte superior derecha. Se pueden subir hasta 5 imágenes por pregunta.
+          <img src="imagenes/obligatorio.png" alt="imagen obligatorio" />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">KPIs</div>
+        <p>
+          En la sección de KPIs, hay dos campos obligatorios a responder.
+          <div class="step">
+            <p>
+              <strong>Ventas vs Meta (% o valor):</strong> Ingrese el porcentaje de
+              ventas alcanzado respecto a la meta establecida, pueden ser números negativos,
+              en el caso que vaya bajo de la meta o números positivos si va arriba de está.
+            </p>
+            <p>
+              <strong>Selección:</strong> Seleccione si cumple o no con la meta.
+            </p>
+          </div>
+        </p>
+        <img src="imagenes/kpis.png" alt="kpis">
+      </div>
+
+      <div class="section">
+        <div class="section-title">Planes de Acción</div>
+        <p>
+          En la sección de Planes de Acción, es obligatorio ingresar al menos un
+          plan con su respectiva fecha y descripción del plan. Los planes adicionales son
+          opcionales.
+        </p>
+        <img src="imagenes/planes.png" alt="planes de acción" />
+        <div class="alert-error">
+          ⚠️ Si no se llena el primer plan con su fecha, mostrará un mensaje en la parte superior derecha.
+          <img src="imagenes/planinfo.png" alt="error planes de acción" />
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">¿Cómo subir imágenes?</div>
+        <div class="step">
+          <p>
+            En cada sección que permite imágenes, verás un botón para cargar
+            archivos. Al hacer clic:
+          </p>
+          <ul>
+            <li>
+              Selecciona hasta 5 imágenes desde tu dispositivo.
+              <img
+                src="imagenes/subida-ejemplo.png"
+                alt="Ejemplo de campo de subida de imágenes"
+              />
+            </li>
+            <li>
+              Espera que se suban antes de continuar a la siguiente sección.
+              <img
+                src="imagenes/subida.png"
+                alt="Ejemplo de campo de subida de imágenes"
+              />
+            </li>
+            <li>
+              Si alguna imagen no se carga, aparecerá un aviso en rojo en la
+              parte superior derecha.
+              <img
+                src="imagenes/errorimg.png"
+                alt="Ejemplo de error de subida de imágenes"
+              />
+            </li>
+          </ul>
+          <p>
+            Puedes verificar que una imagen se cargó correctamente si se muestra
+            una vista previa o el nombre del archivo al lado del campo.
+          </p>
+        </div>
+      </div>
+
+      <div class="section section-finalizar">
+        <div class="section-title">Finalizar</div>
+        <div class="step">
+          <p>
+            <strong>Verificación:</strong> Asegurese de que reciba el mensaje de
+            confirmación <em>Formulario Enviado </em> antes de salirse o cerrar
+            la pestaña.
+          </p>
+          <img
+            src="imagenes/enviar.png"
+            alt="Ejemplo de enviado de formulario"
+          />
+        </div>
+        <div class="alert-success">
+          ✅ Una vez enviado, la visita queda registrada y disponible para
+          seguimiento en reportes.
+        </div>
+        <div class="alert-error">
+          ⚠️ Si al enviar el formulario ocurre un error general, verifique su
+          conexión y comuníquese con Vanessa Durán:
+          <a href="mailto:vanessa.duran@empresasadoc.com"
+            >vanessa.duran@empresasadoc.com</a
+          >
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Consejos útiles</div>
+        <ul>
+          <li>Suba imágenes nítidas, bien iluminadas.</li>
+          <li>Use observaciones para explicar hallazgos.</li>
+          <li>Sea claro con los compromisos en el plan de acción.</li>
+          <li>Los KPIs permiten números negativos y decimales.</li>
+        </ul>
+        <div class="alert-info">
+          💡 Consejo: Puede tomar las fotos antes de llenar el formulario y luego
+            subirlas.
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
