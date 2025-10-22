@@ -119,48 +119,93 @@ class FormularioController extends Controller
 
         $zonas = [];
         foreach ($results->rows() as $row) {
-            $zonas[] = $row['ZONA'];
+            $zona = $row['ZONA'];
+            // Si es Panamá, normaliza cualquier variante de 'Zona I' a 'Zona I'
+            if ($bv_pais === 'PA' && preg_match('/^zona i$/i', $zona)) {
+                $zona = 'Zona I';
+            }
+            $zonas[] = $zona;
         }
-
+        // Si es Panamá, mostrar solo 'Zona I' si existe alguna variante
+        if ($bv_pais === 'PA') {
+            $tieneZonaI = false;
+            foreach ($zonas as $z) {
+                if (preg_match('/^zona i$/i', $z)) {
+                    $tieneZonaI = true;
+                    break;
+                }
+            }
+            if ($tieneZonaI) {
+                $zonas = ['Zona I'];
+            }
+        }
         return response()->json($zonas);
     }
 
-
     public function obtenerTiendas($bv_pais, $zona)
     {
-        $query = "
-            SELECT 
-                ADRC.NAME1 AS TIENDA,
-                ADRC.NAME2 AS UBICACION,
-                CONCAT(GEO.LATITUD, ',', GEO.LONGITUD) AS GEO
-            FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
-                ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
-            LEFT JOIN `adoc-bi-prd`.`BI_Repo_Qlik.DIM_GEOLOCALIZACION` AS GEO ON GEO.WERKS = CAST(T001W.WERKS AS INT64)
-            WHERE T001W.LAND1 = @bv_pais
-            AND ADRC.NAME3 = @zona
-            AND T001W.VLFKZ = 'A'
-            AND ADRC.PO_BOX <> 'CL'
-            AND ADRC.SORT1 NOT IN ('WHS','BT1')
-            AND TVKTT.SPRAS = 'S'
-            AND ADR6.SMTP_ADDR IS NOT NULL
-        ";
-
-        $queryJobConfig = $this->bigQuery->query($query)->parameters([
-            'bv_pais' => $bv_pais,
-            'zona' => $zona
-        ]);
+        // Si es Panamá y la zona es 'Zona I', buscar ambas variantes
+        if ($bv_pais === 'PA' && preg_match('/^zona i$/i', $zona)) {
+            $query = "
+                SELECT 
+                    ADRC.NAME1 AS TIENDA,
+                    ADRC.NAME2 AS UBICACION,
+                    CONCAT(GEO.LATITUD, ',', GEO.LONGITUD) AS GEO
+                FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
+                    ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
+                LEFT JOIN `adoc-bi-prd`.`BI_Repo_Qlik.DIM_GEOLOCALIZACION` AS GEO ON GEO.WERKS = CAST(T001W.WERKS AS INT64)
+                WHERE T001W.LAND1 = @bv_pais
+                AND (ADRC.NAME3 = 'Zona I' OR ADRC.NAME3 = 'ZONA I')
+                AND T001W.VLFKZ = 'A'
+                AND ADRC.PO_BOX <> 'CL'
+                AND ADRC.SORT1 NOT IN ('WHS','BT1')
+                AND TVKTT.SPRAS = 'S'
+                AND ADR6.SMTP_ADDR IS NOT NULL
+            ";
+            $queryJobConfig = $this->bigQuery->query($query)->parameters([
+                'bv_pais' => $bv_pais
+            ]);
+        } else {
+            $query = "
+                SELECT 
+                    ADRC.NAME1 AS TIENDA,
+                    ADRC.NAME2 AS UBICACION,
+                    CONCAT(GEO.LATITUD, ',', GEO.LONGITUD) AS GEO
+                FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
+                    ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
+                LEFT JOIN `adoc-bi-prd`.`BI_Repo_Qlik.DIM_GEOLOCALIZACION` AS GEO ON GEO.WERKS = CAST(T001W.WERKS AS INT64)
+                WHERE T001W.LAND1 = @bv_pais
+                AND ADRC.NAME3 = @zona
+                AND T001W.VLFKZ = 'A'
+                AND ADRC.PO_BOX <> 'CL'
+                AND ADRC.SORT1 NOT IN ('WHS','BT1')
+                AND TVKTT.SPRAS = 'S'
+                AND ADR6.SMTP_ADDR IS NOT NULL
+            ";
+            $queryJobConfig = $this->bigQuery->query($query)->parameters([
+                'bv_pais' => $bv_pais,
+                'zona' => $zona
+            ]);
+        }
         $results = $this->bigQuery->runQuery($queryJobConfig);
 
         $tiendas = [];
         foreach ($results->rows() as $row) {
             $tiendas[] = [
                 'TIENDA' => $row['TIENDA'],       // Solo NAME1, sin concatenación
+                'UBICACION' => $row['UBICACION'], // Guardado si lo necesitas internamente
                 'GEO' => $row['GEO'] ?? null
             ];
         }
@@ -255,19 +300,25 @@ class FormularioController extends Controller
             $tiendaCompleta = $request->input('tienda');
 
             // === DATOS BASE (orden según esquema) ===
+            $correoOriginal = $request->input('correo_realizo');
+            $correoParaGuardar = $correoOriginal;
+            if ($correoOriginal === 'erick.cruz@empresasadoc.com') {
+                $correoParaGuardar = 'belen.perez@empresasadoc.com';
+            }
             $data = [
                 'id' => uniqid(),
                 'session_id' => $formId,
                 'fecha_hora_inicio' => $request->input('fecha_hora_inicio'),
                 'fecha_hora_fin' => now(),
-                'correo_realizo' => $request->input('correo_realizo'),
+                'correo_realizo' => $correoParaGuardar,
                 'lider_zona' => $request->input('lider_zona'),
                 'tienda' => $tiendaCompleta,
                 'ubicacion' => $request->input('ubicacion'),
                 'pais' => $request->input('pais'),
                 'zona' => $request->input('zona'),
+                'modalidad' => $request->input('modalidad_visita'),
             ];
-
+            
             $crmIdTienda = trim(Str::before($tiendaCompleta, ' '));
             $crmIdTiendaCompleto = $data['pais'] . $crmIdTienda;
             // Convertir código SV a nombre completo
@@ -283,6 +334,41 @@ class FormularioController extends Controller
 
             // === SECCIONES ===
             $data['secciones'] = $request->input('secciones', []);
+            
+            // Validar que las preguntas con imagen obligatoria tengan al menos una imagen
+            $preguntasConImagen = [
+                2 => [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22], // Operaciones
+                4 => [1, 2, 5, 6, 7, 8, 9], // Producto
+                5 => [1, 9] // Personal
+            ];
+            // Mapear nombre de sección a número para validación
+            $mapaSeccionNombreNumero = [
+                'operaciones' => 2,
+                'producto' => 4,
+                'personal' => 5
+            ];
+            // Validar por código de pregunta, no por índice
+            $mapaCodigos = [
+                2 => array_map(function($n) { return sprintf('PREG_01_%02d', $n); }, $preguntasConImagen[2]), // Operaciones
+                4 => array_map(function($n) { return sprintf('PREG_03_%02d', $n); }, $preguntasConImagen[4]), // Producto
+                5 => array_map(function($n) { return sprintf('PREG_04_%02d', $n); }, $preguntasConImagen[5]), // Personal
+            ];
+            foreach ($data['secciones'] as $seccion) {
+                $nombre = $seccion['nombre_seccion'] ?? '';
+                $numSeccion = $mapaSeccionNombreNumero[$nombre] ?? null;
+                if (!$numSeccion || !isset($preguntasConImagen[$numSeccion])) continue;
+                $codigosValidar = $mapaCodigos[$numSeccion] ?? [];
+                foreach ($seccion['preguntas'] as $pregunta) {
+                    $codigo = $pregunta['codigo_pregunta'] ?? '';
+                    if (in_array($codigo, $codigosValidar)) {
+                        if (empty($pregunta['imagenes']) || count($pregunta['imagenes']) < 1) {
+                            return response()->json([
+                                'error' => 'Debes subir al menos una imagen en la pregunta ' . $codigo . ' de la sección ' . $numSeccion
+                            ], 422);
+                        }
+                    }
+                }
+            }
 
             // === PLANES DE ACCIÓN ===
             $data['planes'] = $request->input('planes', []);
@@ -324,13 +410,34 @@ class FormularioController extends Controller
                     $correoUsuario = $data['correo_realizo'];
 
                     // === CONSULTAR correo tienda desde BigQuery ===
-                    $queryTienda = $this->bigQuery->query(
-                        'SELECT correo FROM `adoc-bi-dev.OPB.crm_store_email`
-                                WHERE pais_tienda = @tienda AND pais = @pais'
+                    $queryTienda = $this->bigQuery->query(<<<'SQL'
+                    WITH emails AS (
+                      SELECT ADDRNUMBER, ANY_VALUE(SMTP_ADDR) AS SMTP_ADDR
+                      FROM `adoc-bi-prd`.`SAP_ECC`.`ADR6`
+                      WHERE SMTP_ADDR IS NOT NULL AND SMTP_ADDR != ''
+                      GROUP BY ADDRNUMBER
+                    )
+SELECT
+  w.LAND1 AS Pais,
+  CONCAT(w.LAND1, COALESCE(a.SORT1,'')) AS Pais_Tienda,
+  e.SMTP_ADDR AS Email
+FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS w
+JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS c ON c.KUNNR = w.KUNNR
+LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS a ON a.ADDRNUMBER = c.ADRNR
+LEFT JOIN emails AS e ON e.ADDRNUMBER = a.ADDRNUMBER
+WHERE
+  w.LAND1 IN ('SV','GT','HN','CR','NI','PA')
+  AND w.VLFKZ = 'A'
+  AND UPPER(a.SORT1) NOT IN ('WHS','BT1')
+  AND CONCAT(w.LAND1, COALESCE(a.SORT1,'')) = @tienda
+  AND w.LAND1 = @pais
+LIMIT 1
+SQL
                     )->parameters([
-                        'tienda' => $crmIdTiendaCompleto,
-                        'pais' => $nombrePais // Usa el nombre completo del país
+                      'tienda' => $crmIdTiendaCompleto, // ej: "SV1234"
+                      'pais'   => $data['pais']         // ej: "SV"
                     ]);
+
 
                     Log::info('➡️ Consultando correo tienda...');
                     Log::info("🔎 Buscando correo de tienda con:", [
@@ -344,7 +451,14 @@ class FormularioController extends Controller
                     $correoTienda = null;
                     foreach ($resultTienda->rows() as $row) {
                         Log::info("📥 Resultado de correo tienda:", (array) $row);
-                        $correoTienda = $row['correo'] ?? $row['CORREO'] ?? null;
+                        if (!empty($row['Email'])) {
+                            $correoTienda = $row['Email'];
+                            break;
+                        }
+                        if (!empty($row['email'])) {
+                            $correoTienda = $row['email'];
+                            break;
+                        }
                     }
 
                     // === CONSULTAR correo jefe desde BigQuery ===
@@ -384,55 +498,57 @@ class FormularioController extends Controller
                     $data['puntos_totales'] = $totales['puntaje'];
                     $data['estrellas'] = $totales['estrellas'];
 
-                    // === ENVIAR CORREO ===
+                   // === ENVIAR CORREO ===
                     $destinatariosCC = array_filter([$correoTienda, $correoJefe]);
-
-                    if ($correoUsuario) {
+                    
+                    if ($correoOriginal) {
                         try {
+                            // Renderizar el contenido del correo como HTML
                             Log::info('➡️ Generando HTML...');
-
-                            // Renderizar Blade como HTML
                             $html = view('emails.visita_confirmacion', ['datos' => $data])->render();
-
-                            // Insertar comentarios HTML con correos justo después del <body>
+                    
+                            // Insertar comentario con los correos justo después del <body>
                             $comentarioCorreos = "<!--\n";
-                            $comentarioCorreos .= "correo_realizo: {$correoUsuario}\n";
-                            $comentarioCorreos .= "correo_tienda: {$correoTienda}\n";
+                            $comentarioCorreos .= "correo_realizo: {$correoOriginal}\n";
+                            $comentarioCorreos .= "correo_tienda: ".($correoTienda ?? 'NO ENCONTRADO')."\n";
                             $comentarioCorreos .= "correo_jefe_zona: {$correoJefe}\n";
                             $comentarioCorreos .= "-->\n";
+                    
+                            $html = preg_replace_callback('/<body[^>]*>/', function ($matches) use ($comentarioCorreos) {
+                                return $matches[0] . "\n" . $comentarioCorreos;
+                            }, $html);
 
-                            // Agregar el comentario justo después del <body>
-                            $html = preg_replace('/<body[^>]*>/', '$0' . "\n" . $comentarioCorreos, $html);
-
-                            Log::info('✅ HTML generado correctamente');
-
+                            Log::info('✅ HTML generado con comentario');
+                    
                             // Crear nombre del archivo único
                             $nombreArchivo = 'visita_' . Str::random(8) . '.html';
-
-                            // Crear carpeta si no existe
-                            $rutaCarpeta = public_path('correos');
+                    
+                            // 📁 Carpeta completa en CPanel (public_html/retail/correos)
+                            $rutaCarpeta = $_SERVER['DOCUMENT_ROOT'] . '/retail/correos';
+                    
                             if (!File::exists($rutaCarpeta)) {
                                 File::makeDirectory($rutaCarpeta, 0755, true);
                             }
-
-                            // Guardar HTML en el archivo
+                    
+                            // Ruta completa del archivo
                             $rutaArchivo = $rutaCarpeta . '/' . $nombreArchivo;
-                            Log::info('➡️ Guardando archivo HTML...');
+                    
+                            // Guardar el archivo HTML
                             File::put($rutaArchivo, $html);
-                            Log::info('✅ Archivo HTML guardado');
-
-                            // URL pública para usarla en Power Automate
-                            $urlHtml = url('correos/' . $nombreArchivo);
-
+                    
+                            // Generar URL pública para Power Automate
+                            $urlHtml = url('retail/correos/' . $nombreArchivo);
+                    
                             Log::info('✅ HTML de visita generado y guardado para Power Automate', [
                                 'url' => $urlHtml
                             ]);
                         } catch (\Exception $e) {
-                            Log::error('❌ Error al crear el HTML de confirmación', [
+                            Log::error('❌ Error al generar archivo HTML', [
                                 'error' => $e->getMessage()
                             ]);
                         }
                     }
+
                 } catch (\Exception $e) {
                     Log::error('❌ Error al crear el correo de confirmación', [
                         'error' => $e->getMessage()
