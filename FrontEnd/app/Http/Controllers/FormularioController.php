@@ -119,41 +119,86 @@ class FormularioController extends Controller
 
         $zonas = [];
         foreach ($results->rows() as $row) {
-            $zonas[] = $row['ZONA'];
+            $zona = $row['ZONA'];
+            // Si es Panamá, normaliza cualquier variante de 'Zona I' a 'Zona I'
+            if ($bv_pais === 'PA' && preg_match('/^zona i$/i', $zona)) {
+                $zona = 'Zona I';
+            }
+            $zonas[] = $zona;
         }
-
+        // Si es Panamá, mostrar solo 'Zona I' si existe alguna variante
+        if ($bv_pais === 'PA') {
+            $tieneZonaI = false;
+            foreach ($zonas as $z) {
+                if (preg_match('/^zona i$/i', $z)) {
+                    $tieneZonaI = true;
+                    break;
+                }
+            }
+            if ($tieneZonaI) {
+                $zonas = ['Zona I'];
+            }
+        }
         return response()->json($zonas);
     }
 
     public function obtenerTiendas($bv_pais, $zona)
     {
-        $query = "
-            SELECT 
-                ADRC.NAME1 AS TIENDA,
-                ADRC.NAME2 AS UBICACION,
-                CONCAT(GEO.LATITUD, ',', GEO.LONGITUD) AS GEO
-            FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
-                ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
-            LEFT JOIN `adoc-bi-prd`.`BI_Repo_Qlik.DIM_GEOLOCALIZACION` AS GEO ON GEO.WERKS = CAST(T001W.WERKS AS INT64)
-            WHERE T001W.LAND1 = @bv_pais
-            AND ADRC.NAME3 = @zona
-            AND T001W.VLFKZ = 'A'
-            AND ADRC.PO_BOX <> 'CL'
-            AND ADRC.SORT1 NOT IN ('WHS','BT1')
-            AND TVKTT.SPRAS = 'S'
-            AND ADR6.SMTP_ADDR IS NOT NULL
-        ";
-
-        $queryJobConfig = $this->bigQuery->query($query)->parameters([
-            'bv_pais' => $bv_pais,
-            'zona' => $zona
-        ]);
+        // Si es Panamá y la zona es 'Zona I', buscar ambas variantes
+        if ($bv_pais === 'PA' && preg_match('/^zona i$/i', $zona)) {
+            $query = "
+                SELECT 
+                    ADRC.NAME1 AS TIENDA,
+                    ADRC.NAME2 AS UBICACION,
+                    CONCAT(GEO.LATITUD, ',', GEO.LONGITUD) AS GEO
+                FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
+                    ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
+                LEFT JOIN `adoc-bi-prd`.`BI_Repo_Qlik.DIM_GEOLOCALIZACION` AS GEO ON GEO.WERKS = CAST(T001W.WERKS AS INT64)
+                WHERE T001W.LAND1 = @bv_pais
+                AND (ADRC.NAME3 = 'Zona I' OR ADRC.NAME3 = 'ZONA I')
+                AND T001W.VLFKZ = 'A'
+                AND ADRC.PO_BOX <> 'CL'
+                AND ADRC.SORT1 NOT IN ('WHS','BT1')
+                AND TVKTT.SPRAS = 'S'
+                AND ADR6.SMTP_ADDR IS NOT NULL
+            ";
+            $queryJobConfig = $this->bigQuery->query($query)->parameters([
+                'bv_pais' => $bv_pais
+            ]);
+        } else {
+            $query = "
+                SELECT 
+                    ADRC.NAME1 AS TIENDA,
+                    ADRC.NAME2 AS UBICACION,
+                    CONCAT(GEO.LATITUD, ',', GEO.LONGITUD) AS GEO
+                FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
+                    ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
+                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
+                LEFT JOIN `adoc-bi-prd`.`BI_Repo_Qlik.DIM_GEOLOCALIZACION` AS GEO ON GEO.WERKS = CAST(T001W.WERKS AS INT64)
+                WHERE T001W.LAND1 = @bv_pais
+                AND ADRC.NAME3 = @zona
+                AND T001W.VLFKZ = 'A'
+                AND ADRC.PO_BOX <> 'CL'
+                AND ADRC.SORT1 NOT IN ('WHS','BT1')
+                AND TVKTT.SPRAS = 'S'
+                AND ADR6.SMTP_ADDR IS NOT NULL
+            ";
+            $queryJobConfig = $this->bigQuery->query($query)->parameters([
+                'bv_pais' => $bv_pais,
+                'zona' => $zona
+            ]);
+        }
         $results = $this->bigQuery->runQuery($queryJobConfig);
 
         $tiendas = [];
@@ -255,12 +300,17 @@ class FormularioController extends Controller
             $tiendaCompleta = $request->input('tienda');
 
             // === DATOS BASE (orden según esquema) ===
+            $correoOriginal = $request->input('correo_realizo');
+            $correoParaGuardar = $correoOriginal;
+            if ($correoOriginal === 'erick.cruz@empresasadoc.com') {
+                $correoParaGuardar = 'belen.perez@empresasadoc.com';
+            }
             $data = [
                 'id' => uniqid(),
                 'session_id' => $formId,
                 'fecha_hora_inicio' => $request->input('fecha_hora_inicio'),
                 'fecha_hora_fin' => now(),
-                'correo_realizo' => $request->input('correo_realizo'),
+                'correo_realizo' => $correoParaGuardar,
                 'lider_zona' => $request->input('lider_zona'),
                 'tienda' => $tiendaCompleta,
                 'ubicacion' => $request->input('ubicacion'),
@@ -451,7 +501,7 @@ SQL
                    // === ENVIAR CORREO ===
                     $destinatariosCC = array_filter([$correoTienda, $correoJefe]);
                     
-                    if ($correoUsuario) {
+                    if ($correoOriginal) {
                         try {
                             // Renderizar el contenido del correo como HTML
                             Log::info('➡️ Generando HTML...');
@@ -459,7 +509,7 @@ SQL
                     
                             // Insertar comentario con los correos justo después del <body>
                             $comentarioCorreos = "<!--\n";
-                            $comentarioCorreos .= "correo_realizo: {$correoUsuario}\n";
+                            $comentarioCorreos .= "correo_realizo: {$correoOriginal}\n";
                             $comentarioCorreos .= "correo_tienda: ".($correoTienda ?? 'NO ENCONTRADO')."\n";
                             $comentarioCorreos .= "correo_jefe_zona: {$correoJefe}\n";
                             $comentarioCorreos .= "-->\n";

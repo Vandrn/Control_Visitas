@@ -7,6 +7,7 @@
             <option value="belen.perez@empresasadoc.com">belen.perez@empresasadoc.com</option>
             <option value="guillermo.gudiel@empresasadoc.com">guillermo.gudiel@empresasadoc.com</option>
             <option value="edwin.flores@empresasadoc.com">edwin.flores@empresasadoc.com</option>
+            <option value="sandra.rivera@empresasadoc.com">sandra.rivera@empresasadoc.com</option>
             <option value="wilber.gonzalez@empresasadoc.com">wilber.gonzalez@empresasadoc.com</option>
             <option value="juan.chavez@empresasadoc.com">juan.chavez@empresasadoc.com</option>
             <option value="elizabeth.delaroca@empresasadoc.com">elizabeth.delaroca@empresasadoc.com</option>

@@ -816,7 +816,7 @@ $(document).ready(function () {
         window.__modalidad_visita = modalidadSeleccionada;
         // 🆕 VALIDACIÓN DE IMÁGENES REQUERIDAS EN CADA SECCIÓN
         // Busca inputs file visibles y requeridos en la sección actual
-        let imagenesFaltantes = [];
+        /*let imagenesFaltantes = [];
         seccionActual.find("input[type='file'][required]").each(function (idx) {
             const input = this;
             const fieldName = input.name.replace(/\[\]$/, '');
@@ -852,7 +852,7 @@ $(document).ready(function () {
         if (imagenesFaltantes.length > 0) {
             mostrarNotificacion(`⚠️ Debe subir la(s) imagen(es) requerida(s):<br>${imagenesFaltantes.map(txt => `⚠️ ${txt}`).join('<br>')}`, 'warning');
             return;
-        }
+        }*/
 
         // Only save at the very last section
         if (!dataSaved && indiceActual === secciones.length - 1) {
