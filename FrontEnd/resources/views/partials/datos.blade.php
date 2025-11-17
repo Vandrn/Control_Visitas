@@ -34,6 +34,6 @@
         </div>
         <input type="hidden" id="modalidad_visita" name="modalidad_visita" value="">
     </div>
-    <button class="boton btnSiguiente">Continuar</button>
+    <button type="button" class="boton" id="btnContinuarDatos">Continuar</button>
 </div>
  

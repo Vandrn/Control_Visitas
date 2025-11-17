@@ -1,1185 +1,498 @@
-$(document).ready(function () {
-    // Modalidad: Virtual o Presencial
-    let modalidadSeleccionada = '';
-    $(document).on('click', '.modalidad-btn', function() {
-        $('.modalidad-btn').removeClass('modalidad-activa');
-        $(this).addClass('modalidad-activa');
-        modalidadSeleccionada = $(this).data('modalidad');
-        $('#modalidad_visita').val(modalidadSeleccionada);
-        // Habilitar botón continuar solo si hay correo y modalidad
-        checarHabilitarContinuar();
-    });
+// ======================================================
+// Imports
+// ======================================================
+import { ocultarTodo, mostrarById, initNavegacion } from './formulario-navegacion.js';
+import { guardarSeccion, obtenerEstructuraFinal } from './formulario-guardado.js';
+import { setupSubidaIncremental, mostrarPreviewImagen, imagenesSubidas, subidaEnProceso } from './formulario-imagenes.js';
+import { mostrarNotificacion } from './formulario-notificaciones.js';
+import { debounce, bindSeleccionModalidad } from './formulario-utils.js';
+import { obtenerUbicacionUsuario, calcularDistancia } from './formulario-ubicacion.js';
 
-    // Habilitar botón continuar solo si hay correo y modalidad
-    function checarHabilitarContinuar() {
-        let correoValido = false;
-        var sel = $("#correo_tienda_select");
-        if (sel.length && sel.val() === 'otro') {
-            correoValido = $("#correo_tienda_otro").val().match(/^[a-zA-Z0-9._%+-]+@empresasadoc\.com$/);
-        } else if (sel.length) {
-            correoValido = !!sel.val();
-        } else {
-            correoValido = $("#correo_tienda").val().match(/^[a-zA-Z0-9._%+-]+@empresasadoc\.com$/);
-        }
-    }
+// ======================================================
+// Estado global mínimo (evitar variables sueltas)
+// ======================================================
+let savedState = null;
+let indiceActual = 0;
+let modalidadSeleccionada = null;
+let dataSaved = false;
 
-    // Validar correo y modalidad al cambiar
-    $('#correo_tienda_select, #correo_tienda_otro').on('input change', checarHabilitarContinuar);
+// Se asume que estas existen en el DOM/layout
+const secciones = [
+  'intro',
+  'datos',
+  'preguntas-1', 'seccion-1',
+  'preguntas-2', 'seccion-2',
+  'preguntas-3', 'seccion-3',
+  'preguntas-4', 'seccion-4',
+  'preguntas-5', 'seccion-5',
+  'preguntas-6', 'seccion-6'
+];
 
-    // Estilo para botón activo
-    $('<style>.modalidad-activa{background:#e6b200;color:#fff;box-shadow:0 2px 8px #e6b20080;}</style>').appendTo('head');
-    // Mostrar/ocultar input de correo 'otro' según selección
-    var selectCorreo = document.getElementById('correo_tienda_select');
-    var inputCorreoOtro = document.getElementById('correo_tienda_otro');
-    if (selectCorreo && inputCorreoOtro) {
-        selectCorreo.addEventListener('change', function() {
-            if (this.value === 'otro') {
-                inputCorreoOtro.style.display = '';
-                inputCorreoOtro.required = true;
-            } else {
-                inputCorreoOtro.style.display = 'none';
-                inputCorreoOtro.required = false;
-                inputCorreoOtro.value = '';
-            }
-        });
-        // Inicializar estado al cargar
-        if (selectCorreo.value === 'otro') {
-            inputCorreoOtro.style.display = '';
-            inputCorreoOtro.required = true;
-        } else {
-            inputCorreoOtro.style.display = 'none';
-            inputCorreoOtro.required = false;
-        }
-    }
+// Helpers externos esperados
+/* global formStorage, $ */
 
-    let dataSaved = false;
+// ======================================================
+// Inicio
+// ======================================================
+document.addEventListener('DOMContentLoaded', () => {
+  initNavegacion();
+  setupSubidaIncremental();
+  inicializarCombosPaisZonaTienda();
+  bindNavegacion();
+  bindSeleccionModalidad();
+  restaurarEstadoInicial();
+  iniciarKeepAlive();
 
-    // 🆕 VARIABLES PARA SUBIDA INCREMENTAL
-    let imagenesSubidas = {}; // Almacenar URLs de imágenes ya subidas
-    let subidaEnProceso = false;
+  setTimeout(() => {
+    console.log("Reforzando visibilidad y orden inicial...");
+    // Oculta todo de nuevo, por si algo quedó visible
+    $('.formulario section, .formulario [id^="intro-"], .formulario [id^="seccion-"]').hide();
 
-    // 📍 FUNCIÓN PARA CALCULAR DISTANCIA ENTRE DOS COORDENADAS (Haversine)
-    function calcularDistancia(lat1, lng1, lat2, lng2) {
-        const R = 6371000; // Radio de la Tierra en metros
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLng = (lng2 - lng1) * Math.PI / 180;
-        const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-            Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c; // Distancia en metros
-    }
-
-    // 📱 OBTENER UBICACIÓN DEL USUARIO
-    function obtenerUbicacionUsuario() {
-        return new Promise((resolve, reject) => {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(resolve, reject, {
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 300000 // 5 minutos
-                });
-            } else {
-                reject(new Error('Geolocalización no soportada'));
-            }
-        });
-    }
-
-    // Obtener ubicación al cargar la página
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(function (position) {
-            $("#ubicacion").val(position.coords.latitude + "," + position.coords.longitude);
-        }, function (error) {
-            console.error("Error obteniendo la ubicación:", error);
-        });
+    // Carga el estado guardado o muestra la primera sección
+    const state = formStorage.loadState?.();
+    if (state?.indiceActual !== undefined) {
+      mostrarSeccion(state.indiceActual);
     } else {
-        console.error("Geolocalización no soportada en este navegador.");
+      mostrarSeccion(0);
+    }
+  }, 500);
+});
+
+
+// ======================================================
+// Combo País → Zona → Tienda
+// ======================================================
+function inicializarCombosPaisZonaTienda() {
+  // Restaurar país si existe
+  try { 
+    $("#pais").val(savedState?.general?.pais).trigger('change'); 
+  } catch (e) { 
+    console.warn(e); 
+  }
+
+  //Pais
+    $.get('/retail/paises', (data) => {
+    // ✅ Acepta tanto array plano como array de objetos
+    if (!Array.isArray(data)) {
+      console.warn('Respuesta inesperada de /retail/paises', data);
+      return;
     }
 
-    // Inicializar el campo de fecha con la fecha actual
-    $("#fecha_inicio").val(new Date().toISOString());
+    $("#pais").empty().append('<option value="">Seleccione un país</option>');
 
-    // Evento para regresar al inicio al hacer clic en el logo
-    $("#logo-regreso").click(function () {
-        indiceActual = 0;
-        mostrarSeccion(indiceActual);
-        location.href = "#intro";
+    data.forEach(p => {
+      const value = typeof p === 'string' ? p : p.value;
+      const label = typeof p === 'string' ? p : (p.label || p.value);
+      $("#pais").append(`<option value="${value}">${label}</option>`);
     });
 
-    // Cargar países
-    $.get("/retail/paises", function (data) {
-        if (Array.isArray(data)) {
-            $("#pais").append('<option value="">Seleccione un país</option>');
-            data.forEach(p => {
-                $("#pais").append(`<option value="${p.value}" data-nombre="${p.label}">${p.label}</option>`);
-            });
-        } else {
-            console.error("La respuesta no es un array:", data);
-        }
+    // Restaurar país guardado si existe
+    savedState ||= formStorage.loadState();
+    const paisGuardado = savedState?.general?.pais;
+    if (paisGuardado) $("#pais").val(paisGuardado).trigger('change');
+  });
+
+  // País → Zonas
+  $(document).off('change.pais').on('change.pais', '#pais', function () {
+    const pais = $(this).val();
+    $("#zona").empty().append('<option value="">Seleccione una zona</option>');
+    $("#CRM_ID_TIENDA").empty().append('<option value="">Seleccione una tienda</option>');
+    if (!pais) return;
+
+    $.get(`/retail/zonas/${pais}`, (data) => {
+      if (!Array.isArray(data)) {
+        console.warn('Respuesta inesperada de /retail/zonas', data);
+        return;
+      }
+
+      data.forEach(z => {
+        const val = typeof z === 'string' ? z : (z.ZONA || z.value || z.label);
+        $("#zona").append(`<option value="${val}">${val}</option>`);
+      });
+
+      savedState ||= formStorage.loadState();
+      const zonaGuardada = savedState?.general?.zona;
+      if (zonaGuardada) $("#zona").val(zonaGuardada).trigger('change');
     });
+  });
 
-    // Cargar zonas según el país seleccionado
-    $("#pais").change(function () {
-        let pais = $(this).val();
-        $("#zona").empty().append('<option value="">Seleccione una zona</option>');
-        $("#CRM_ID_TIENDA").empty().append('<option value="">Seleccione una tienda</option>');
+  // Zona → Tiendas
+  $(document).off('change.zona').on('change.zona', '#zona', function () {
+    const pais = $("#pais").val();
+    const zona = $(this).val();
+    $("#CRM_ID_TIENDA").empty().append('<option value="">Seleccione una tienda</option>');
+    if (!pais || !zona) return;
 
-        if (pais) {
-            $.get(`/retail/zonas/${pais}`, function (data) {
-                if (Array.isArray(data)) {
-                    $("#zona").append(data.map(z => `<option value="${z}">${z}</option>`));
-                } else {
-                    console.error("La respuesta no es un array:", data);
-                }
-            });
-        }
+    $.get(`/retail/tiendas/${pais}/${zona}`, (data) => {
+      if (!Array.isArray(data)) {
+        console.warn('Respuesta inesperada de /retail/tiendas', data);
+        return;
+      }
+
+      data.forEach(t => {
+        // ✅ Permite tanto objetos como strings
+        const tienda = t.TIENDA || t.value || t.label || t;
+        const ubicacion = t.UBICACION || '';
+        const geo = t.GEO || '';
+        $("#CRM_ID_TIENDA").append(
+          `<option value="${tienda}" data-ubicacion="${ubicacion}" data-geo="${geo}">${tienda}</option>`
+        );
+      });
+
+      savedState ||= formStorage.loadState();
+      const tiendaGuardada = savedState?.general?.tienda;
+      if (tiendaGuardada) $("#CRM_ID_TIENDA").val(tiendaGuardada).trigger('change');
+
+      $('#CRM_ID_TIENDA').off('change.distancia').on('change.distancia', validarDistanciaTienda);
     });
+  });
+}
 
-    // Cargar tiendas según la zona seleccionada
-    $("#zona").change(function () {
-        let pais = $("#pais").val();
-        let zona = $(this).val();
-        $("#CRM_ID_TIENDA").empty().append('<option value="">Seleccione una tienda</option>');
+// ======================================================
+// Navegación (mostrar secciones/intro/preguntas)
+// ======================================================
+function bindNavegacion() {
+  // Empezar (ir a “datos”)
+  $(document).off('click.empezar1').on('click.empezar1', '.btnEmpezar1', () => {
+    const idx = secciones.indexOf('datos');
+    indiceActual = idx >= 0 ? idx : 1;
+    mostrarSeccion(indiceActual);
+    debouncedSaveState();
+  });
 
-        if (pais && zona) {
-            $.get(`/retail/tiendas/${pais}/${zona}`, function (data) {
-                if (Array.isArray(data)) {
-                    data.forEach(t => {
-                        $("#CRM_ID_TIENDA").append(
-                            `<option value="${t.TIENDA}" data-ubicacion="${t.UBICACION}" data-geo="${t.GEO || ''}">${t.TIENDA}</option>`
-                        );
-                    });
+  // Empezar por sección concreta
+  $(document).off('click.empezar').on('click.empezar', '.btnEmpezar', function () {
+    const n = $(this).data('seccion');
+    if (n == null) return;
 
-                    // 📍 AGREGAR EVENTO PARA VALIDAR DISTANCIA
-                    $('#CRM_ID_TIENDA').off('change.distancia').on('change.distancia', validarDistanciaTienda);
-                } else {
-                    console.error("La respuesta no es un array:", data);
-                }
-            });
-        }
-    });
-
-    // Definir el orden de las vistas
-    let secciones = ["intro", "datos", "seccion-1", "intro-2", "seccion-2", "intro-3", "seccion-3", "intro-4", "seccion-4", "intro-5", "seccion-5", "seccion-6", "seccion-7"];
-    let indiceActual = 0;
-
-    function mostrarSeccion(indice) {
-        secciones.forEach((seccion, i) => {
-            let elemento = $("#" + seccion);
-            if (i === indice) {
-                elemento.show();
-            } else {
-                elemento.hide();
-            }
-        });
+    const wrapper = `preguntas-${n}`;
+    const target = secciones.includes(wrapper) ? wrapper : `seccion-${n}`;
+    const idx = secciones.indexOf(target);
+    if (idx >= 0) {
+      indiceActual = idx;
+      mostrarSeccion(indiceActual);
     }
+  });
 
-    // Transformar valores de radio buttons (1-5 → 0.2-1)
-    function transformarValoresRadio() {
-        $("input[type='radio']:checked").each(function () {
-            let valor = $(this).val();
-            let nuevoValor = { "1": 0.2, "2": 0.4, "3": 0.6, "4": 0.8, "5": 1.0 }[valor] || valor;
-            $(this).attr("data-transformado", nuevoValor);
-        });
+  // Siguiente (validaciones + envío final)
+  $(document).off('click.siguiente').on('click.siguiente', '.btnSiguiente', async function (e) {
+    e.preventDefault();
+
+    const seccionActualId = secciones[indiceActual];
+    const $seccionActual = $(`#${seccionActualId}`);
+    const inputsVisibles = $seccionActual.find('input, select, textarea')
+      .filter(function () { return $(this).is(':visible') && !$(this).is(':disabled'); })
+      .toArray();
+
+    // Validar modalidad seleccionada
+    if (!modalidadSeleccionada && !$('#modalidad_visita').val()) {
+      mostrarNotificacion('Seleccione la modalidad de la visita.', 'warning');
+      return;
     }
+    modalidadSeleccionada = $('#modalidad_visita').val();
+    window.__modalidad_visita = modalidadSeleccionada;
 
-    // ================================
-    // 🆕 SUBIDA INCREMENTAL MEJORADA CON COMPRESIÓN
-    // ================================
-
-    /**
-     * Configurar subida incremental automática con compresión
-     */
-    function setupSubidaIncremental() {
-        const imageInputs = $('input[name^="IMG_"]');
-
-        imageInputs.each(function () {
-            const $input = $(this);
-            const rawName = $input.attr('name');
-            const fieldName = rawName.replace(/\[\]$/, ''); // Elimina corchetes [] si hay
-
-            $input.off('change.incremental').on('change.incremental', async function (e) {
-                const files = Array.from(e.target.files);
-
-                if (files.length === 0) return;
-                if (subidaEnProceso) {
-                    mostrarNotificacion('⏳ Por favor espere a que termine la subida anterior', 'warning');
-                    return;
-                }
-
-                // asegúrate de re-declararlo aquí también por seguridad
-                const rawName = $input.attr('name');
-                const fieldName = rawName.replace(/\[\]$/, '');
-
-                if (fieldName.startsWith('IMG_OBS_')) {
-                    for (let i = 0; i < files.length && i < 5; i++) {
-                        const file = files[i];
-
-                        if (!file.type.startsWith('image/')) {
-                            mostrarNotificacion(`❌ El archivo ${file.name} no es una imagen`, 'error');
-                            continue;
-                        }
-
-                        if (!imagenesSubidas[fieldName]) {
-                            imagenesSubidas[fieldName] = [];
-                        }
-
-                        const index = imagenesSubidas[fieldName].length;
-                        const indexedFieldName = `${fieldName}_${String(index + 1).padStart(2, '0')}`;
-
-                        const url = await comprimirYSubirImagen(file, indexedFieldName, $input);
-                        imagenesSubidas[fieldName].push(url);
-                    }
-
-                    return;
-                }
-
-                for (let i = 0; i < files.length && i < 5; i++) {
-                    const file = files[i];
-
-                    if (!file.type.startsWith('image/')) {
-                        mostrarNotificacion(`❌ El archivo ${file.name} no es una imagen`, 'error');
-                        continue;
-                    }
-
-                    if (!imagenesSubidas[fieldName]) {
-                        imagenesSubidas[fieldName] = [];
-                    }
-
-                    const index = imagenesSubidas[fieldName].length;
-                    const indexedFieldName = `${fieldName}_${String(index + 1).padStart(2, '0')}`;
-
-                    const url = await comprimirYSubirImagen(file, indexedFieldName, $input);
-                    imagenesSubidas[fieldName].push(url);
-                }
-            });
-        });
-    }
-
-    /**
-     * Comprimir imagen agresivamente y subirla
-     */
-    async function comprimirYSubirImagen(file, fieldName, $input) {
-        subidaEnProceso = true;
-        mostrarIndicadorSubida($input, true, fieldName, 'Comprimiendo...');
-
-        try {
-            // 1. COMPRIMIR IMAGEN AGRESIVAMENTE
-            const imagenComprimida = await comprimirImagenCliente(file);
-
-            if (!imagenComprimida) {
-                throw new Error('Error en la compresión de imagen');
-            }
-
-            const tamañoComprimido = imagenComprimida.size / (1024 * 1024);
-            console.log(`📦 Tamaño después de compresión: ${tamañoComprimido.toFixed(2)}MB`);
-
-            // 2. VERIFICAR LÍMITE DE 6MB
-            if (tamañoComprimido > 6) {
-                throw new Error(`Imagen demasiado grande: ${tamañoComprimido.toFixed(2)}MB. Máximo: 6MB`);
-            }
-
-            // 3. SUBIR AL SERVIDOR
-            mostrarIndicadorSubida($input, true, fieldName, 'Subiendo...');
-            const url = await subirImagenComprimida(imagenComprimida, fieldName, $input);
-            return url;
-
-        } catch (error) {
-            console.error('Error en compresión/subida:', error);
-            mostrarNotificacion(`❌ ${error.message}`, 'error');
-            $input.val(''); // Limpiar input en caso de error
-        } finally {
-            subidaEnProceso = false;
-            mostrarIndicadorSubida($input, false, fieldName);
-        }
-    }
-    /**
-     * Comprimir imagen en el cliente antes de subir
-     */
-    function comprimirImagenCliente(file) {
-        return new Promise((resolve, reject) => {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
-
-            img.onload = function () {
-                // Calcular nuevas dimensiones (máximo 1200px)
-                const maxWidth = 1200;
-                const maxHeight = 1200;
-
-                let { width, height } = img;
-
-                if (width > height) {
-                    if (width > maxWidth) {
-                        height = (height * maxWidth) / width;
-                        width = maxWidth;
-                    }
-                } else {
-                    if (height > maxHeight) {
-                        width = (width * maxHeight) / height;
-                        height = maxHeight;
-                    }
-                }
-
-                canvas.width = width;
-                canvas.height = height;
-
-                // Dibujar imagen redimensionada
-                ctx.drawImage(img, 0, 0, width, height);
-
-                // Comprimir iterativamente hasta estar bajo 6MB
-                let quality = 0.8; // Calidad inicial
-                let attempts = 0;
-                const maxAttempts = 10;
-
-                function tryCompress() {
-                    canvas.toBlob((blob) => {
-                        if (!blob) {
-                            reject(new Error('Error al comprimir imagen'));
-                            return;
-                        }
-
-                        const sizeInMB = blob.size / (1024 * 1024);
-                        console.log(`🔄 Intento ${attempts + 1}: ${sizeInMB.toFixed(2)}MB con calidad ${quality}`);
-
-                        if (sizeInMB <= 6 || attempts >= maxAttempts) {
-                            if (sizeInMB <= 6) {
-                                console.log(`✅ Compresión exitosa: ${sizeInMB.toFixed(2)}MB`);
-                                resolve(blob);
-                            } else {
-                                reject(new Error(`No se pudo comprimir bajo 6MB después de ${maxAttempts} intentos`));
-                            }
-                        } else {
-                            // Reducir calidad más agresivamente
-                            quality *= 0.7;
-                            attempts++;
-                            tryCompress();
-                        }
-                    }, 'image/jpeg', quality);
-                }
-
-                tryCompress();
-            };
-
-            img.onerror = () => reject(new Error('Error al cargar la imagen'));
-            img.src = URL.createObjectURL(file);
-        });
-    }
-
-    /**
-     * Subir imagen ya comprimida al servidor
-     */
-    async function subirImagenComprimida(imagenBlob, fieldName, $input) {
-      try {
-        const formData = new FormData();
-        formData.append('image', imagenBlob, `${fieldName}.jpg`);
-        formData.append('field_name', fieldName);
-    
-        const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    
-        const response = await fetch('/retail/subir-imagen-incremental', {
-          method: 'POST',
-          headers: {
-            'X-CSRF-TOKEN': token,
-            'Accept': 'application/json'
-          },
-          body: formData,
-          credentials: 'same-origin'
-        });
-    
-        const result = await response.json();
-    
-        if (response.ok && result.success) {
-          console.log(`✅ Imagen subida: ${fieldName} -> ${result.url}`);
-          mostrarNotificacion(`✅ ${fieldName} subida correctamente`, 'success');
-          mostrarPreviewImagen($input, result.url, fieldName);
-          return result.url;
-        } else {
-          throw new Error(result.error || 'Error desconocido');
-        }
-      } catch (error) {
-        console.error('Error en subida:', error);
-        throw error;
+    // Validar correo (en “datos”)
+    if (seccionActualId === 'datos') {
+      const correo = (() => {
+        const sel = $('#correo_tienda_select');
+        if (sel.length && sel.val() === 'otro') return $('#correo_tienda_otro').val();
+        if (sel.length) return sel.val();
+        return $('#correo_tienda').val();
+      })();
+      if (!/^[a-zA-Z0-9._%+-]+@empresasadoc\.com$/.test(correo || '')) {
+        mostrarNotificacion('Ingrese un correo válido.', 'warning');
+        return;
       }
     }
 
-    /**
-     * Mostrar indicador de subida mejorado
-     */
-    function mostrarIndicadorSubida($input, show, fieldName, mensaje = 'Subiendo') {
-        let $indicator = $input.parent().find('.upload-indicator');
-
-        if (show && $indicator.length === 0) {
-            $indicator = $(`
-                <div class="upload-indicator" style="
-                    margin-top: 8px; 
-                    color: #059669; 
-                    font-size: 14px; 
-                    display: flex; 
-                    align-items: center;
-                    background: #f0f9ff;
-                    padding: 8px 12px;
-                    border-radius: 8px;
-                    border-left: 4px solid #059669;
-                ">
-                    <div class="spinner" style="
-                        width: 16px; height: 16px; 
-                        border: 2px solid #d1fae5; 
-                        border-top: 2px solid #059669; 
-                        border-radius: 50%; 
-                        animation: spin 1s linear infinite; 
-                        margin-right: 8px;
-                    "></div>
-                    🚀 ${mensaje} ${fieldName}...
-                </div>
-                <style>
-                    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-                </style>
-            `);
-            $input.after($indicator);
-        } else if (show && $indicator.length > 0) {
-            // Actualizar mensaje
-            $indicator.html(`
-                <div class="spinner" style="
-                    width: 16px; height: 16px; 
-                    border: 2px solid #d1fae5; 
-                    border-top: 2px solid #059669; 
-                    border-radius: 50%; 
-                    animation: spin 1s linear infinite; 
-                    margin-right: 8px;
-                "></div>
-                🚀 ${mensaje} ${fieldName}...
-            `);
-        } else if (!show && $indicator.length > 0) {
-            $indicator.remove();
-        }
+    // Bloquear si hay subida en proceso
+    if (subidaEnProceso) {
+      mostrarNotificacion('⏳ Espere a que termine la subida de imágenes.', 'warning');
+      return;
     }
 
-    /**
-     * Mostrar preview mejorado de imagen subida
-     */
-    function mostrarPreviewImagen($input, url, fieldName) {
-        let $preview = $input.parent().find('.image-preview');
-
-        if ($preview.length === 0) {
-            $preview = $(`
-                <div class="image-preview" style="
-                    margin-top: 12px;
-                    padding: 12px;
-                    background: #f0f9ff;
-                    border-radius: 8px;
-                    border: 2px solid #059669;
-                ">
-                    <img src="${url}" alt="${fieldName}" style="
-                        max-width: 120px; 
-                        max-height: 120px; 
-                        border-radius: 8px;
-                        display: block;
-                        margin: 0 auto 8px auto;
-                    ">
-                    <div style="
-                        font-size: 12px; 
-                        color: #059669; 
-                        text-align: center;
-                        font-weight: bold;
-                    ">✅ Imagen guardada en servidor</div>
-                    <div style="
-                        font-size: 11px; 
-                        color: #6b7280; 
-                        text-align: center;
-                        margin-top: 4px;
-                    ">URL: ${url.substring(0, 40)}...</div>
-                </div>
-            `);
-            $input.after($preview);
-        } else {
-            $preview.find('img').attr('src', url);
-            $preview.find('div:last-child').text(`URL: ${url.substring(0, 40)}...`);
-        }
+    // Imágenes requeridas visibles en la sección
+    const faltantes = imagenesRequeridasEn($seccionActual);
+    if (faltantes.length) {
+      const lista = faltantes.map(t => `⚠️ ${t}`).join('<br>');
+      mostrarNotificacion(`Debe subir la(s) imagen(es) requerida(s):<br>${lista}`, 'warning');
+      return;
     }
 
-    // Recopilar respuestas antes de guardar
-    function obtenerEstructuraFinal() {
-        transformarValoresRadio(); // Asegúrate de tener los valores transformados
-
-        const seccionesMap = {};
-        const kpis = [];
-        const planes = [];
-        const imagenes = imagenesSubidas || {};
-        const mapaCampos = {
-            "preg_02_01": "PREG_01_01",
-            "preg_02_02": "PREG_01_02",
-            "preg_02_03": "PREG_01_03",
-            "preg_02_04": "PREG_01_04",
-            "preg_02_05": "PREG_01_05",
-            "preg_02_06": "PREG_01_06",
-            "preg_02_07": "PREG_01_07",
-            "preg_02_08": "PREG_01_08",
-            "preg_02_09": "PREG_01_09",
-            "preg_02_10": "PREG_01_10",
-            "preg_02_11": "PREG_01_11",
-            "preg_02_12": "PREG_01_12",
-            "preg_02_13": "PREG_01_13",
-            "preg_02_14": "PREG_01_14",
-            "preg_02_15": "PREG_01_15",
-            "preg_02_16": "PREG_01_16",
-            "preg_02_17": "PREG_01_17",
-            "preg_02_18": "PREG_01_18",
-            "preg_02_19": "PREG_01_19",
-            "preg_02_20": "PREG_01_20",
-            "preg_02_21": "PREG_01_21",
-            "preg_02_22": "PREG_01_22",
-            "obs_02_01": "OBS_01_01",
-            "preg_03_01": "PREG_02_01",
-            "preg_03_02": "PREG_02_02",
-            "preg_03_03": "PREG_02_03",
-            "preg_03_04": "PREG_02_04",
-            "preg_03_05": "PREG_02_05",
-            "preg_03_06": "PREG_02_06",
-            "preg_03_07": "PREG_02_08",
-            "obs_03_01": "OBS_02_01",
-            "preg_04_01": "PREG_03_01",
-            "preg_04_02": "PREG_03_02",
-            "preg_04_03": "PREG_03_03",
-            "preg_04_04": "PREG_03_04",
-            "preg_04_05": "PREG_03_05",
-            "preg_04_06": "PREG_03_06",
-            "preg_04_07": "PREG_03_07",
-            "preg_04_08": "PREG_03_08",
-            "preg_04_09": "PREG_03_09",
-            "obs_04_01": "OBS_03_01",
-            "preg_05_01": "PREG_04_02",
-            "preg_05_02": "PREG_04_03",
-            "preg_05_03": "PREG_04_05",
-            "preg_05_04": "PREG_04_06",
-            "preg_05_05": "PREG_04_07",
-            "preg_05_06": "PREG_04_08",
-            "preg_05_07": "PREG_04_09",
-            "preg_05_08": "PREG_04_10",
-            "preg_05_09": "PREG_04_11",
-            "preg_05_10": "PREG_04_12",
-            "preg_05_11": "PREG_04_13",
-            "preg_05_12": "PREG_04_14",
-            "preg_05_13": "PREG_04_15",
-            "preg_05_14": "PREG_04_16",
-            "obs_05_01": "OBS_04_01",
-            "preg_06_01": "PREG_05_01",
-            "preg_06_02": "PREG_05_02",
-            "preg_06_03": "PREG_05_03",
-            "preg_06_04": "PREG_05_04",
-            "preg_06_05": "PREG_05_05",
-            "preg_06_06": "PREG_05_06",
-            "obs_06_01": "OBS_05_01"
-        };
-
-        // Recolectar preguntas normales y observaciones
-        $("input, select, textarea").not("input[type='file']").each(function () {
-            const $el = $(this);
-            const rawName = $el.attr("name");
-            if (!rawName) return;
-
-            let valor = null;
-
-            if ($el.is(":radio") && $el.is(":checked")) {
-                valor = $el.attr("data-transformado") || $el.val();
-            } else if (!$el.is(":radio")) {
-                valor = $el.val();
-            }
-
-            if (!valor || valor.trim() === "") return;
-
-            const codigo = mapaCampos[rawName] || rawName;
-
-            // Detectar sección por código
-            const seccionMatch = codigo.match(/^(PREG|OBS)_([0-9]{2})_/);
-            if (seccionMatch) {
-                const seccionKey = seccionMatch[2]; // ej: '01'
-                const seccionNombre = {
-                    "01": "operaciones",
-                    "02": "administracion",
-                    "03": "producto",
-                    "04": "personal",
-                    "05": "kpi",
-                    "06": "otros"
-                }[seccionKey] || `seccion_${seccionKey}`;
-                if (seccionNombre === "kpi") return; // Evitar duplicar KPIs en secciones
-                if (!seccionesMap[seccionNombre]) seccionesMap[seccionNombre] = [];
-
-                // Convertir código de pregunta a código de imagen
-                let codigoImg = '';
-                if (codigo.startsWith('PREG_')) {
-                    // PREG_01_01 → IMG_02_01
-                    const partes = codigo.split('_');
-                    if (partes.length === 3) {
-                        const seccionInterna = String(parseInt(partes[1]) + 1).padStart(2, '0');
-                        codigoImg = `IMG_${seccionInterna}_${partes[2]}`;
-                    }
-                } else if (codigo.startsWith('OBS_')) {
-                    const mapeoObs = {
-                        'OBS_01_01': 'IMG_OBS_OPE',
-                        'OBS_02_01': 'IMG_OBS_ADM',
-                        'OBS_03_01': 'IMG_OBS_PRO',
-                        'OBS_04_01': 'IMG_OBS_PER',
-                    };
-                    codigoImg = mapeoObs[codigo] || '';
-                }
-
-                const imagenesPregunta = Object.keys(imagenes)
-                    .filter(k => k.startsWith(codigoImg))
-                    .flatMap(k => imagenes[k] || []);
-
-                seccionesMap[seccionNombre].push({
-                    codigo_pregunta: codigo,
-                    respuesta: valor,
-                    imagenes: imagenesPregunta
-                });
-            }
-        });
-
-        // Recolectar KPIs como bloque separado
-        // Recolectar KPIs como bloque separado
-        for (let i = 1; i <= 6; i++) {
-            const nombreCampo = `preg_06_0${i}`;
-            const cod = mapaCampos[nombreCampo] || nombreCampo;
-            const val = $(`input[name="${nombreCampo}"]:checked`).val();
-            const variacion = $(`input[name="var_06_0${i}"]`).val();
-
-            if (val && variacion !== "") {
-                kpis.push({
-                    codigo_pregunta: cod,
-                    valor: val,
-                    variacion: variacion
-                });
-            }
-        }
-
-        // Agregar observación KPI como un KPI especial
-        const obsKPI = $(`textarea[name="obs_06_01"]`).val();
-        if (obsKPI && obsKPI.trim() !== "") {
-            kpis.push({
-                codigo_pregunta: "OBS_KPI",
-                valor: obsKPI.trim(),
-                variacion: ""
-            });
-        }
-
-        // Recolectar Planes de Acción
-        for (let i = 1; i <= 2; i++) {
-            const desc = $(`input[name="PLAN_0${i}"]`).val();
-            const fecha = $(`input[name="FECHA_PLAN_0${i}"]`).val();
-            if (desc && fecha) {
-                planes.push({
-                    descripcion: desc,
-                    fecha_cumplimiento: fecha
-                });
-            }
-        }
-        // Recolectar plan adicional opcional
-        const descAdicional = $(`input[name="PLAN_03"]`).val();
-        const fechaAdicional = $(`input[name="FECHA_PLAN_03"]`).val();
-        if (descAdicional && fechaAdicional) {
-            planes.push({
-                descripcion: descAdicional,
-                fecha_cumplimiento: fechaAdicional
-            });
-        }
-
-
-        // Recolectar datos generales
-        let tienda = $("#CRM_ID_TIENDA option:selected");
-        let pais = $("#pais option:selected").data("nombre");
-        let datosFinales = {
-            session_id: crypto.randomUUID(),
-            correo_realizo: (function() {
-                var sel = $("#correo_tienda_select");
-                if (sel.length && sel.val() === 'otro') {
-                    return $("#correo_tienda_otro").val();
-                } else if (sel.length) {
-                    return sel.val();
-                } else {
-                    return $("#correo_tienda").val();
-                }
-            })(),
-            lider_zona: $("#jefe_zona").val(),
-            tienda: tienda.val() + " - " + tienda.data("ubicacion"),
-            ubicacion: $("#ubicacion").val(),
-            pais: pais,
-            zona: $("#zona").val(),
-            fecha_hora_inicio: $("#fecha_inicio").val(),
-            fecha_hora_fin: new Date().toISOString(),
-            modalidad_visita: $('#modalidad_visita').val(),
-            secciones: Object.entries(seccionesMap).map(([nombre, preguntas]) => ({
-                nombre_seccion: nombre,
-                preguntas: preguntas
-            })),
-            kpis: kpis,
-            planes: planes
-        };
-
-        console.log("📦 Estructura final lista para enviar:", datosFinales);
-        return datosFinales;
-    }
-    function guardarSeccion(datos) {
-
-        if (!datos) return;
-
-        // Mostrar el JSON final que se enviará al backend
-        console.log('📦 JSON final a enviar al backend:', JSON.stringify(datos, null, 2));
-
-        const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-        // 🚫 MOSTRAR RESUMEN DE IMÁGENES ANTES DE ENVIAR
-        const imagenesResumen = Object.keys(imagenesSubidas).length;
-        if (imagenesResumen > 0) {
-            console.log(`📷 Imágenes subidas previamente: ${imagenesResumen}`);
-            Object.entries(imagenesSubidas).forEach(([campo, url]) => {
-                console.log(`  ✅ ${campo}: ${url}`);
-            });
-        }
-
-        fetch('/retail/guardar-seccion', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': token,
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(datos),
-          credentials: 'same-origin'
-        }).then(async response => {
-            if (response.ok) {
-                return response.json();
-            } else {
-                // Intentar extraer el mensaje de error del backend
-                let errorMsg = "Error al guardar: " + response.status;
-                try {
-                    const data = await response.json();
-                    if (data && data.error) {
-                        errorMsg = data.error;
-                    }
-                } catch (e) {}
-                throw new Error(errorMsg);
-            }
-        })
-            .then(data => {
-                console.log("✅ Formulario guardado exitosamente:", data);
-                mostrarNotificacion('✅ Formulario enviado correctamente', 'success');
-
-                // 🧹 Limpiar URLs de imágenes de la memoria
-                imagenesSubidas = {};
-                console.log("🧹 Cache de imágenes limpiado");
-            })
-            .catch(error => {
-                console.error("❌ Error al enviar los datos:", error);
-                mostrarNotificacion('❌ ' + (error.message || 'Error al enviar el formulario'), 'error');
-            });
+    // Validaciones por sección (KPIs en seccion-6)
+    if (seccionActualId === 'seccion-6') {
+      const ok = validarVariacionesKPI();
+      if (!ok) {
+        mostrarNotificacion('Ingrese valores numéricos válidos en todas las variaciones KPI.', 'warning');
+        return;
+      }
     }
 
-    $(".btnSiguiente").click(function (event) {
-        event.preventDefault(); // 🆕 AGREGAR ESTA LÍNEA
+    // Validación de required HTML5
+    const hayError = inputsVisibles.some(i => !i.checkValidity());
+    if (hayError) {
+      mostrarNotificacion('Complete todos los campos requeridos antes de continuar.', 'warning');
+      inputsVisibles.find(i => !i.checkValidity())?.reportValidity();
+      return;
+    }
 
-        let seccionActual = $("#" + secciones[indiceActual]);
-        let inputsVisibles = seccionActual.find("input, select, textarea").filter(function () {
-            return $(this).is(":visible") && !$(this).is(":disabled");
-        }).toArray();
-        
-        // Validar que haya modalidad seleccionada
-        if (!modalidadSeleccionada) {
-            return mostrarNotificacion("Seleccione la modalidad de la visita.", 'warning');
-        }
+    // Envío final al terminar
+    if (!dataSaved && indiceActual === secciones.length - 1) {
+      // Al menos 1 plan de acción
+      let planesValidos = 0;
+      for (let i = 1; i <= 2; i++) {
+        const plan = document.querySelector(`input[name="PLAN_0${i}"]`);
+        const fecha = document.querySelector(`input[name="FECHA_PLAN_0${i}"]`);
+        if (plan?.value?.trim() && fecha?.value?.trim()) planesValidos++;
+      }
+      if (planesValidos < 1) {
+        mostrarNotificacion('Debe completar al menos un Plan de Acción y su fecha.', 'warning');
+        return;
+      }
 
-        // Validar correo según el nuevo select/input
-        if (indiceActual === secciones.indexOf("datos")) {
-            var correo = (function() {
-                var sel = $("#correo_tienda_select");
-                if (sel.length && sel.val() === 'otro') {
-                    return $("#correo_tienda_otro").val();
-                } else if (sel.length) {
-                    return sel.val();
-                } else {
-                    return $("#correo_tienda").val();
-                }
-            })();
-            if (!correo || !correo.match(/^[a-zA-Z0-9._%+-]+@empresasadoc\.com$/)) {
-                return mostrarNotificacion("Ingrese un correo válido.", 'warning');
-            }
-        }
-        
-        // Verificar que no haya subidas en proceso antes de continuar
-        if (subidaEnProceso) {
-            mostrarNotificacion('⏳ Por favor espere a que termine la subida de la imagen', 'warning');
-            return;
-        }
-        
-        // Guardar modalidad en variable global para otras secciones
-        window.__modalidad_visita = modalidadSeleccionada;
-        // 🆕 VALIDACIÓN DE IMÁGENES REQUERIDAS EN CADA SECCIÓN
-        // Busca inputs file visibles y requeridos en la sección actual
-        /*let imagenesFaltantes = [];
-        seccionActual.find("input[type='file'][required]").each(function (idx) {
-            const input = this;
-            const fieldName = input.name.replace(/\[\]$/, '');
-            let falta = false;
-            if (input.files.length === 0) {
-                falta = true;
-            } else {
-                const imagenesAsociadas = Object.keys(imagenesSubidas).filter(k => k.startsWith(fieldName));
-                if (imagenesAsociadas.length === 0) {
-                    falta = true;
-                }
-            }
-            if (falta) {
-                // Buscar label asociada
-                let label = $(input).closest('.form-group, .mb-4, .mb-3').find('label').first().text().trim();
-                if (!label) {
-                    // Si no hay label, usar placeholder si existe
-                    if (input.placeholder) {
-                        label = input.placeholder;
-                    } else {
-                        // Si no hay placeholder, extraer número de la pregunta del nombre técnico
-                        let match = fieldName.match(/(\d{2,})$/);
-                        if (match) {
-                            label = `Pregunta ${parseInt(match[1], 10)}`;
-                        } else {
-                            label = fieldName;
-                        }
-                    }
-                }
-                imagenesFaltantes.push(label);
-            }
-        });
-        if (imagenesFaltantes.length > 0) {
-            mostrarNotificacion(`⚠️ Debe subir la(s) imagen(es) requerida(s):<br>${imagenesFaltantes.map(txt => `⚠️ ${txt}`).join('<br>')}`, 'warning');
-            return;
-        }*/
+      // Confirmar que ninguna imagen requerida quedó sin subir
+      const pendientes = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER'].filter(fn => {
+        const input = document.querySelector(`input[name='${fn}']`);
+        if (!input || input.files.length === 0) return false; // no seleccionada, no exigir
+        // si se seleccionó, exigir que esté en el mapa subido
+        return !Object.keys(imagenesSubidas).some(k => k.startsWith(fn));
+      });
+      if (pendientes.length) {
+        mostrarNotificacion(`⚠️ Faltan por subir completamente: ${pendientes.join(', ')}`, 'warning');
+        return;
+      }
 
-        // Only save at the very last section
-        if (!dataSaved && indiceActual === secciones.length - 1) {
-            // Validar al menos un plan completo antes de enviar
-            let planesValidos = 0;
-            for (let i = 1; i <= 2; i++) {
-                const plan = document.querySelector(`input[name="PLAN_0${i}"]`);
-                const fecha = document.querySelector(`input[name="FECHA_PLAN_0${i}"]`);
-                if (plan && fecha && plan.value.trim() !== '' && fecha.value.trim() !== '') {
-                    planesValidos++;
-                }
-            }
+      if (subidaEnProceso) {
+        mostrarNotificacion('⏳ Espere a que termine la subida de imágenes.', 'warning');
+        return;
+      }
 
-            if (planesValidos < 1) {
-                mostrarNotificacion("Debe completar al menos un Plan de Acción y su fecha.", "warning");
-                return;
-            }
+      // Enviar
+      const payload = obtenerEstructuraFinal(); // viene del módulo importado
+      guardarSeccion(payload);                  // viene del módulo importado
+      dataSaved = true;
+      mostrarNotificacion('¡Formulario completado! Enviando…', 'success');
+      return;
+    }
 
-            console.log('🚀 Enviando formulario final con URLs de imágenes...');
+    // Avanzar
+    mostrarSeccion(++indiceActual);
+    debouncedSaveState();
+  });
 
-            // 🆕 VALIDACIÓN MEJORADA: Verificar que las imágenes requeridas estén subidas
-            const imagenesRequeridas = ['IMG_OBS_OPE', 'IMG_OBS_ADM', 'IMG_OBS_PRO', 'IMG_OBS_PER'];
-            const imagenesNoSubidas = [];
+  // Guardado local “debounced”
+  var debouncedSaveState = debounce(() => {
+    try {
+      const state = formStorage.buildState?.() || {};
+      state.indiceActual = indiceActual;
+      formStorage.saveState?.(state);
+    } catch (e) { console.warn('No se pudo guardar estado:', e); }
+  }, 300);
+}
 
-            imagenesRequeridas.forEach(fieldName => {
-                const input = document.querySelector(`input[name='${fieldName}']`);
-                if (input && input.files.length > 0) {
-                    // Hay archivo seleccionado, verificar si se subió
-                    const imagenesAsociadas = Object.keys(imagenesSubidas).filter(k => k.startsWith(fieldName));
-                    if (imagenesAsociadas.length === 0) {
-                        imagenesNoSubidas.push(fieldName);
-                    }
-                }
-            });
+// Mostrar una sección segura
+function mostrarSeccion(indice) {
+  ocultarTodo();
+  const id = secciones[indice];
+  if (!id) return;
 
-            if (imagenesNoSubidas.length > 0) {
-                mostrarNotificacion(`⚠️ Faltan por subir completamente: ${imagenesNoSubidas.join(', ')}`, 'warning');
-                console.log(`❌ Imágenes pendientes de subida:`, imagenesNoSubidas);
-                return;
-            }
+  const $target = $('#' + id);
+  if (!$target.length) {
+    console.warn('mostrarSeccion: no se encontró', id);
+    return;
+  }
 
-            // ✅ Verificar que no hay subidas en proceso
-            if (subidaEnProceso) {
-                mostrarNotificacion('⏳ Por favor espere a que termine la subida de imágenes', 'warning');
-                return;
-            }
+  // Mostrar el contenedor padre adecuado (por si estaba oculto)
+  $target.parents('.contenedor-centrado, .solo-centro, .formulario').each(function () {
+    $(this).css('display', 'block');
+  });
 
-            // 📊 MOSTRAR RESUMEN FINAL
-            const totalImagenes = Object.keys(imagenesSubidas).length;
-            console.log(`📷 Total de imágenes subidas: ${totalImagenes}`);
+  // Mostrar la sección actual
+  $target.show().css('display', 'block');
 
-            guardarSeccion(obtenerEstructuraFinal());
-            dataSaved = true;
+  // Si la sección pertenece a preguntas-N, mostrar su seccion-N
+  const wrapper = $target.closest('[id^="preguntas-"]');
+  if (wrapper.length) wrapper.show();
 
-            mostrarNotificacion(`¡Formulario completado! Se enviaron ${totalImagenes} imágenes correctamente.`, 'success');
-            //window.location.replace("/retail/formulario");
-            return;
-        }
+  if (id.startsWith('preguntas-')) {
+    const num = id.replace('preguntas-', '');
+    $('#seccion-' + num).show();
+  }
 
-        let hayError = inputsVisibles.some(input => !input.checkValidity());
+  // Asegurar visibilidad del contenedor principal
+  $('.formulario').css('display', 'block');
 
-        if (hayError) {
-            mostrarNotificacion('Por favor, complete todos los campos requeridos antes de continuar.', 'warning');
-            inputsVisibles.find(input => !input.checkValidity())[0].reportValidity();
-            return;
-        }
+  console.log('Mostrado:', id, 'visible:', $target.is(':visible'));
+}
 
-        // Validar campos de variación de KPI si estamos en sección 6
-        if (indiceActual === secciones.indexOf("seccion-6")) {
-            let variacionesValidas = true;
 
-            for (let i = 1; i <= 6; i++) {
-                let input = $(`input[name='var_06_0${i}']`);
-                let valor = input.val();
-
-                // Validar que haya algo y sea número válido
-                if (valor === "" || isNaN(parseFloat(valor))) {
-                    input.addClass('input-error');
-                    variacionesValidas = false;
-                } else {
-                    input.removeClass('input-error');
-                }
-            }
-
-            if (!variacionesValidas) {
-                mostrarNotificacion('Por favor, ingrese valores numéricos válidos en todas las variaciones KPI.', 'warning');
-                return;
-            }
-        }
-
-        mostrarSeccion(++indiceActual);
-    });
-    $(".btnEmpezar1").click(function () {
-        indiceActual = secciones.indexOf("datos");
-        mostrarSeccion(indiceActual);
-    });
-
-    $(".btnEmpezar").click(function () {
-        let seccion = $(this).data("seccion");
-        let introSeccion = `intro-${seccion}`;
-        let preguntasSeccion = `preguntas-${seccion}`;
-
-        if ($("#" + introSeccion).length && $("#" + preguntasSeccion).length) {
-            $("#" + introSeccion).hide();
-            $("#" + preguntasSeccion).show();
-            indiceActual = secciones.indexOf("seccion-" + seccion);
-            mostrarSeccion(indiceActual);
-        }
-    });
-
-    // 🆕 Inicializar subida incremental
-    setupSubidaIncremental();
-
-    // Mostrar la primera sección al cargar
+// ======================================================
+// Restauración de estado
+// ======================================================
+function restaurarEstadoInicial() {
+  // Mostrar inmediato si hay índice guardado
+  savedState ||= formStorage.loadState?.();
+  if (typeof savedState?.indiceActual === 'number') {
+    indiceActual = savedState.indiceActual;
     mostrarSeccion(indiceActual);
+  } else {
+    mostrarSeccion(secciones.indexOf('intro') >= 0 ? secciones.indexOf('intro') : 0);
+  }
 
-    /**
-     * Mostrar notificaciones tipo toast
-     */
-    function mostrarNotificacion(mensaje, tipo = 'info') {
-        const colores = {
-            'success': '#059669',
-            'error': '#dc2626',
-            'warning': '#d97706',
-            'info': '#2563eb'
-        };
+  // Segundo pase (tras posibles renders async)
+  setTimeout(() => {
+    restoreStateAfterAjax();
+    setTimeout(restoreStateAfterAjax, 300);
+  }, 1500);
+}
 
-        const iconos = {
-            'success': '✅',
-            'error': '❌',
-            'warning': '⚠️',
-            'info': 'ℹ️'
-        };
+function restoreStateAfterAjax() {
+  try {
+    savedState ||= formStorage.loadState?.();
+    if (!savedState) return;
 
-        const $notification = $(`
-            <div class="notification" style="
-                position: fixed; 
-                top: 20px; 
-                right: 20px; 
-                z-index: 9999;
-                background: ${colores[tipo]}; 
-                color: white; 
-                padding: 12px 16px; 
-                border-radius: 8px;
-                font-size: 14px; 
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                max-width: 350px; 
-                min-width: 250px;
-                animation: slideIn 0.3s ease;
-                display: flex;
-                align-items: center;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            ">
-                <span style="margin-right: 8px; font-size: 16px;">${iconos[tipo]}</span>
-                <span>${mensaje}</span>
-            </div>
-            <style>
-                @keyframes slideIn {
-                    from { 
-                        transform: translateX(100%); 
-                        opacity: 0; 
-                    }
-                    to { 
-                        transform: translateX(0); 
-                        opacity: 1; 
-                    }
-                }
-                @keyframes slideOut {
-                    from { 
-                        transform: translateX(0); 
-                        opacity: 1; 
-                    }
-                    to { 
-                        transform: translateX(100%); 
-                        opacity: 0; 
-                    }
-                }
-            </style>
-        `);
+    // Inputs
+    formStorage.restoreInputsFromState?.(savedState.sections);
 
-        // Agregar al body
-        $('body').append($notification);
+    // Modalidad
+    if (savedState.modalidadSeleccionada) {
+      modalidadSeleccionada = savedState.modalidadSeleccionada;
+      $('#modalidad_visita').val(modalidadSeleccionada);
+      $('.modalidad-btn').removeClass('modalidad-activa');
+      $(`.modalidad-btn[data-modalidad='${modalidadSeleccionada}']`).addClass('modalidad-activa');
+    }
 
-        // Auto-remover después de 4 segundos
-        setTimeout(() => {
-            $notification.css({
-                'animation': 'slideOut 0.3s ease',
-                'animation-fill-mode': 'forwards'
-            });
+    // Imágenes previas
+    if (savedState.imagenesSubidas) {
+      Object.assign(imagenesSubidas, savedState.imagenesSubidas);
+      Object.entries(imagenesSubidas).forEach(([campo, urls]) => {
+        const baseName = campo.replace(/(_\d{2})$/, '');
+        let $input = $(`[name='${campo}']`);
+        if (!$input.length) $input = $(`[name^='${baseName}']`).first();
+        if (!$input.length) $input = $(`input[name^='${campo}']`).first();
+        if (!$input.length) return;
 
-            setTimeout(() => {
-                if ($notification.length) {
-                    $notification.remove();
-                }
-            }, 300);
-        }, 4000);
-
-        // Permitir cerrar con clic
-        $notification.click(function () {
-            $(this).css({
-                'animation': 'slideOut 0.3s ease',
-                'animation-fill-mode': 'forwards'
-            });
-            setTimeout(() => {
-                $(this).remove();
-            }, 300);
+        (Array.isArray(urls) ? urls : [urls]).forEach(url => {
+          if (url) mostrarPreviewImagen($input, url, campo);
         });
-
-        return $notification;
+      });
     }
 
-    // 🎯 VALIDAR DISTANCIA CUANDO CAMBIA LA TIENDA
-    async function validarDistanciaTienda() {
-        // Si la modalidad es virtual, no mostrar mensaje de distancia
-        if (window.__modalidad_visita === 'virtual') {
-            $('#mensaje-distancia').remove();
-            return;
-        }
-        const tiendaSelect = document.getElementById('CRM_ID_TIENDA');
-        const selectedOption = tiendaSelect.options[tiendaSelect.selectedIndex];
-
-        // Limpiar mensaje anterior
-        $('#mensaje-distancia').remove();
-
-        if (!selectedOption.value || selectedOption.value === '') {
-            return; // No hay tienda seleccionada
-        }
-
-        // Obtener coordenadas de la tienda del data attribute
-        const coordenadasTienda = selectedOption.getAttribute('data-geo');
-
-        if (!coordenadasTienda) {
-            mostrarMensajeDistancia('⚠️ No se encontraron coordenadas para esta tienda', 'warning');
-            return;
-        }
-
-        // Mostrar mensaje de carga
-        mostrarMensajeDistancia('📍 Verificando tu ubicación...', 'info');
-
-        try {
-            // Obtener ubicación del usuario
-            const position = await obtenerUbicacionUsuario();
-            const latUsuario = position.coords.latitude;
-            const lngUsuario = position.coords.longitude;
-
-            // Parsear coordenadas de la tienda
-            const [latTienda, lngTienda] = coordenadasTienda.split(',').map(Number);
-
-            // Calcular distancia
-            const distancia = calcularDistancia(latUsuario, lngUsuario, latTienda, lngTienda);
-            const distanciaRedondeada = Math.round(distancia);
-
-            // Mostrar resultado con color
-            if (distanciaRedondeada <= 50) {
-                mostrarMensajeDistancia(
-                    `✅ Te encuentras a ${distanciaRedondeada} metros de la tienda`,
-                    'success'
-                );
-            } else {
-                mostrarMensajeDistancia(
-                    `❌ Te encuentras a ${distanciaRedondeada} metros de la tienda (muy lejos)`,
-                    'danger'
-                );
-            }
-
-        } catch (error) {
-            console.error('Error obteniendo ubicación:', error);
-            mostrarMensajeDistancia('❌ No se pudo obtener tu ubicación', 'danger');
-        }
+    // Sección
+    if (typeof savedState.indiceActual === 'number') {
+      indiceActual = savedState.indiceActual;
+      mostrarSeccion(indiceActual);
     }
+  } catch (e) {
+    console.warn('Error restaurando estado', e);
+  }
+}
 
-    // 🎨 MOSTRAR MENSAJE DE DISTANCIA
-    function mostrarMensajeDistancia(mensaje, tipo) {
-        // Remover mensaje anterior
-        $('#mensaje-distancia').remove();
-
-        // Crear nuevo mensaje
-        const claseColor = {
-            'success': 'background: #10b981; color: white;',
-            'danger': 'background: #ef4444; color: white;',
-            'warning': 'background: #f59e0b; color: white;',
-            'info': 'background: #3b82f6; color: white;'
-        }[tipo] || 'background: #6b7280; color: white;';
-
-        const mensajeHtml = `
-            <div id="mensaje-distancia" style="
-                margin-top: 8px; 
-                padding: 12px 16px; 
-                border-radius: 8px; 
-                font-size: 14px; 
-                font-weight: 500;
-                text-align: center;
-                ${claseColor}
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            ">
-                ${mensaje}
-            </div>
-        `;
-
-        // Insertar después del select de tienda
-        $('#CRM_ID_TIENDA').after(mensajeHtml);
+// ======================================================
+// Validaciones auxiliares
+// ======================================================
+function imagenesRequeridasEn($seccion) {
+  const faltantes = [];
+  $seccion.find("input[type='file'][required]").each(function () {
+    const fieldName = this.name.replace(/\[\]$/, '');
+    const tieneArchivo = this.files && this.files.length > 0;
+    const fueSubida = Object.keys(imagenesSubidas).some(k => k.startsWith(fieldName));
+    if (!tieneArchivo || !fueSubida) {
+      let label = $(this).closest('.form-group, .mb-4, .mb-3').find('label').first().text().trim();
+      if (!label) {
+        label = this.placeholder || (fieldName.match(/(\d{2,})$/)?.[0] ? `Pregunta ${parseInt(RegExp.$1, 10)}` : fieldName);
+      }
+      faltantes.push(label);
     }
+  });
+  return faltantes;
+}
 
+function validarVariacionesKPI() {
+  let ok = true;
+  for (let i = 1; i <= 6; i++) {
+    const $input = $(`input[name='var_06_0${i}']`);
+    const val = $input.val();
+    if (val === '' || isNaN(parseFloat(val))) {
+      $input.addClass('input-error');
+      ok = false;
+    } else {
+      $input.removeClass('input-error');
+    }
+  }
+  return ok;
+}
 
-    // 🔄 Mantener sesión activa cada 3 minutos con alerta si se pierde
-    let intentosFallidosSesion = 0;
-    const limiteFallosSesion = 2; // Al segundo fallo consecutivo, muestra alerta
-    
-    setInterval(() => {
-        fetch('/retail/keep-alive', {
-            method: 'GET',
-            credentials: 'same-origin'
-        }).then(response => {
-            if (!response.ok) {
-                throw new Error(`Código ${response.status}`);
-            }
-            intentosFallidosSesion = 0; // Reinicia contador si responde bien
-            console.log('⏳ Sesión mantenida activa');
-        }).catch((err) => {
-            intentosFallidosSesion++;
-            console.warn(`⚠️ Intento fallido ${intentosFallidosSesion}:`, err);
-    
-            if (intentosFallidosSesion >= limiteFallosSesion) {
-                mostrarNotificacion('⚠️ Tu sesión ha expirado o no se pudo renovar. Por favor recarga la página.', 'warning');
-            }
-        });
-    }, 3 * 60 * 1000); // Cada 3 minutos
+// ======================================================
+// Distancia a tienda (solo cuando la visita NO es virtual)
+// ======================================================
+async function validarDistanciaTienda() {
+  if (window.__modalidad_visita === 'virtual') {
+    $('#mensaje-distancia').remove();
+    return;
+  }
 
+  const select = document.getElementById('CRM_ID_TIENDA');
+  const opt = select?.options[select.selectedIndex];
+  $('#mensaje-distancia').remove();
+  if (!opt?.value) return;
 
-});
+  const geo = opt.getAttribute('data-geo');
+  if (!geo) {
+    mostrarMensajeDistancia('⚠️ No se encontraron coordenadas para esta tienda', 'warning');
+    return;
+  }
+
+  mostrarMensajeDistancia('📍 Verificando tu ubicación...', 'info');
+
+  try {
+    const pos = await obtenerUbicacionUsuario();
+    const [latT, lngT] = geo.split(',').map(Number);
+    const dist = calcularDistancia(pos.coords.latitude, pos.coords.longitude, latT, lngT);
+    const m = Math.round(dist);
+
+    if (m <= 150) {
+      mostrarMensajeDistancia(`✅ Te encuentras a ${m} metros de la tienda`, 'success');
+    } else {
+      mostrarMensajeDistancia(`❌ Te encuentras a ${m} metros de la tienda (muy lejos)`, 'danger');
+    }
+  } catch (e) {
+    console.error(e);
+    mostrarMensajeDistancia('❌ No se pudo obtener tu ubicación', 'danger');
+  }
+}
+
+function mostrarMensajeDistancia(mensaje, tipo) {
+  $('#mensaje-distancia').remove();
+  const estilos = {
+    success: 'background:#10b981;color:#fff;',
+    danger:  'background:#ef4444;color:#fff;',
+    warning: 'background:#f59e0b;color:#fff;',
+    info:    'background:#3b82f6;color:#fff;'
+  }[tipo] || 'background:#6b7280;color:#fff;';
+
+  $('#CRM_ID_TIENDA').after(`
+    <div id="mensaje-distancia" style="
+      margin-top:8px;padding:12px 16px;border-radius:8px;
+      font-size:14px;font-weight:500;text-align:center;box-shadow:0 2px 4px rgba(0,0,0,.1);
+      ${estilos}
+    ">${mensaje}</div>
+  `);
+}
+
+// ======================================================
+// Keep-alive de sesión
+// ======================================================
+function iniciarKeepAlive() {
+  let fallos = 0;
+  const limite = 2;
+  setInterval(() => {
+    fetch('/retail/keep-alive', { method: 'GET', credentials: 'same-origin' })
+      .then(r => { if (!r.ok) throw new Error(`Código ${r.status}`); fallos = 0; })
+      .catch(err => {
+        if (++fallos >= limite) mostrarNotificacion('⚠️ Tu sesión ha expirado o no se pudo renovar. Recarga la página.', 'warning');
+        console.warn('Keep-alive fallo:', err);
+      });
+  }, 180000);
+}

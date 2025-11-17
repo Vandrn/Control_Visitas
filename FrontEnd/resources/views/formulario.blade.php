@@ -8,10 +8,49 @@
     <title>Control de Visitas</title>
     <link rel="stylesheet" href="{{ asset('css/formulario1.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="{{ asset('js/formulario1.js') }}" defer></script>
+    <script src="{{ asset('js/formStorage.js') }}"></script>
+    <script type="module" src="{{ asset('js/formulario1.js') }}"></script>
+
+    <!-- Evitar parpadeo: ocultar las secciones del formulario hasta que JS restaure la visible -->
+    <!-- Nota: el bloqueo inicial fue movido a la lógica de servidor/cookie más abajo para evitar conflictos con JS -->
+
+    {{-- Mostrar en el servidor la sección guardada si existe cookie cv_form_idx (evita flicker). Si no existe, ocultar todo y dejar que JS lo restaure. --}}
+    @php
+        $secciones = ["intro","datos","seccion-1","intro-2","seccion-2","intro-3","seccion-3","intro-4","seccion-4","intro-5","seccion-5","seccion-6","seccion-7"];
+        $idx = request()->cookie('cv_form_idx');
+        $idToShow = null;
+        if ($idx !== null && is_numeric($idx)) {
+            $i = intval($idx);
+            if ($i >=0 && $i < count($secciones)) $idToShow = $secciones[$i];
+        }
+    @endphp
+    <style>
+        @if($idToShow)
+            /* Ocultar todo pero mostrar solo la sección guardada */
+            .formulario form > * { display: none !important; }
+            #{{ $idToShow }} { display: block !important; }
+        @else
+            /* Fallback: ocultar todo pero sin !important para permitir que JS muestre la sección cuando el usuario haga "Empezar" */
+            .formulario form > * { display: none; }
+        @endif
+    </style>
 
     <!-- 📍 ESTILOS ADICIONALES PARA VALIDACIÓN DE DISTANCIA -->
     <style>
+        /* Ocultar solo al inicio para evitar flicker,
+            pero permitir que JS controle visibilidad */
+        [id^="intro-"],
+        [id^="preguntas-"],
+        [id^="seccion-"],
+        #datos {
+            display: none;
+        }
+
+        /* Cuando JS active la clase visible-forzada, muéstrala */
+        .visible-forzada {
+            display: block !important;
+        }
+        
         .distance-validation {
             margin-top: 8px;
             padding: 12px 16px;
@@ -77,10 +116,10 @@
 
 <body>
     @include ('partials.header')
-    @include('partials.intro')
     <div class="formulario">
         <form onsubmit="return false;" method="POST" enctype="multipart/form-data">
             @csrf
+            @include('partials.intro')
             @include('partials.datos')
             @include ('partials.seccion-1')
             @include ('partials.largas')

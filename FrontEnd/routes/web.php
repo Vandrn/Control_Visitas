@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Route;
 Route::post('retail/guardar-seccion', [FormularioController::class, 'guardarSeccion'])->name('guardar.seccion');
 Route::get('/formulario', [FormularioController::class, 'mostrarFormulario'])->name('formulario');
 Route::post('/formulario', [FormularioController::class, 'mostrarFormulario'])->name('formulario');
-Route::get('/keep-alive', function () {
+Route::get('retail/keep-alive', function () {
     return response()->json(['alive' => true]);
 });
 

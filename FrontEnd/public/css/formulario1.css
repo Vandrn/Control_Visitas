@@ -110,7 +110,6 @@ body {
 
 /* Solo centrar verticalmente en la intro y login, no en todas las secciones */
 .solo-centro {
-    min-height: calc(100vh - 110px);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -173,7 +172,7 @@ body {
     font-size: 24px;
     max-width: 90%;
     text-align: center;
-    margin: 7% auto;
+    margin: 5.5% auto;
 }
 
 .contenedor-centrado {
