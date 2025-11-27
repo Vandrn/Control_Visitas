@@ -7,9 +7,9 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Control de Visitas</title>
     <link rel="stylesheet" href="{{ asset('css/formulario1.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/formulario-styles.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="{{ asset('js/formulario1.js') }}" defer></script>
-
+    <script type="module" src="{{ asset('js/app.js') }}"></script>
     <!-- 📍 ESTILOS ADICIONALES PARA VALIDACIÓN DE DISTANCIA -->
     <style>
         .distance-validation {

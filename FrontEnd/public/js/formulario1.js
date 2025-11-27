@@ -7,7 +7,7 @@ $(document).ready(function () {
     let subidaEnProceso = false;
 
     // 📍 FUNCIÓN PARA CALCULAR DISTANCIA ENTRE DOS COORDENADAS (Haversine)
-    /*function calcularDistancia(lat1, lng1, lat2, lng2) {
+    function calcularDistancia(lat1, lng1, lat2, lng2) {
         const R = 6371000; // Radio de la Tierra en metros
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -32,7 +32,7 @@ $(document).ready(function () {
                 reject(new Error('Geolocalización no soportada'));
             }
         });
-    }*/
+    }
 
     // Obtener ubicación al cargar la página
     if (navigator.geolocation) {
@@ -100,7 +100,7 @@ $(document).ready(function () {
                     });
 
                     // 📍 AGREGAR EVENTO PARA VALIDAR DISTANCIA
-                    //$('#CRM_ID_TIENDA').off('change.distancia').on('change.distancia', validarDistanciaTienda);
+                    $('#CRM_ID_TIENDA').off('change.distancia').on('change.distancia', validarDistanciaTienda);
                 } else {
                     console.error("La respuesta no es un array:", data);
                 }
@@ -587,7 +587,6 @@ $(document).ready(function () {
             }
         });
 
-        // Recolectar KPIs como bloque separado
         // Recolectar KPIs como bloque separado
         for (let i = 1; i <= 6; i++) {
             const nombreCampo = `preg_06_0${i}`;
