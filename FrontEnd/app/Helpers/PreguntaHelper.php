@@ -39,7 +39,7 @@ class PreguntaHelper
             'PREG_02_04' => 'Libro de cuadre de efectivo y caja chica al día.',
             'PREG_02_05' => 'Libro de horarios al día y firmados por los empleados.',
             'PREG_02_06' => 'Conteo efectuado según lineamientos.',
-            'PREG_02_08' => 'Files actualizados.',
+            'PREG_02_07' => 'Files actualizados.',
             'OBS_02_01' => 'Observaciones del área de administración',
 
             // PRODUCTO (PREG_03_XX)
@@ -79,6 +79,41 @@ class PreguntaHelper
             'OBS_KPI'     => 'Observaciones KPIs',
         ];
 
-        return $map[$codigo] ?? $codigo;
+        $codigo = trim((string)$codigo);
+        if ($codigo === '') return 'Pregunta';
+
+        // 1) Normalizar: preg_02_01 -> PREG_02_01 / obs_02_01 -> OBS_02_01
+        $key = strtoupper($codigo);
+        $key = str_replace('-', '_', $key);
+
+        // 2) Ajuste de grupos (porque tus datos vienen como PREG_02..06 pero tu mapa está 01..05)
+        //    Operaciones: PREG_02_xx -> PREG_01_xx
+        //    Admin:       PREG_03_xx -> PREG_02_xx
+        //    Producto:    PREG_04_xx -> PREG_03_xx
+        //    Personal:    PREG_05_xx -> PREG_04_xx
+        //    KPIs:        PREG_06_xx -> PREG_05_xx
+        $keyShifted = preg_replace_callback('/^(PREG|OBS)_(0?\d+)_/', function($m){
+            $tipo = $m[1];
+            $grupo = intval($m[2]);
+
+            // solo shift si está entre 2 y 6
+            if ($grupo >= 2 && $grupo <= 6) {
+                $grupo = $grupo - 1;
+            }
+
+            return $tipo . '_' . str_pad((string)$grupo, 2, '0', STR_PAD_LEFT) . '_';
+        }, $key);
+
+        // 3) Buscar en mapa (primero shifted, luego directo)
+        if (isset($map[$keyShifted])) return $map[$keyShifted];
+        if (isset($map[$key])) return $map[$key];
+
+        // 4) Fallback: no devuelvas el técnico crudo
+        if (preg_match('/^(PREG|OBS)_(\d+)_([0-9]+)$/', $key, $mm)) {
+            return ($mm[1] === 'OBS' ? 'Observación' : 'Pregunta') . ' ' .
+                str_pad($mm[2], 2, '0', STR_PAD_LEFT) . '-' . str_pad($mm[3], 2, '0', STR_PAD_LEFT);
+        }
+
+        return 'Pregunta';
     }
 }

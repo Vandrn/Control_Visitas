@@ -28,6 +28,24 @@
 
 <body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
     @php use Illuminate\Support\Str; @endphp
+    @php
+        $resumenAreas = $datos['resumen_areas'] ?? [];
+
+        // Si viene como string JSON
+        if (is_string($resumenAreas)) {
+            $resumenAreas = json_decode($resumenAreas, true) ?: [];
+        }
+
+        // Si viene como objeto (stdClass)
+        if (is_object($resumenAreas)) {
+            $resumenAreas = json_decode(json_encode($resumenAreas), true) ?: [];
+        }
+
+        // Si viene null o cualquier cosa rara
+        if (!is_array($resumenAreas)) {
+            $resumenAreas = [];
+        }
+    @endphp
     <h1>📝 Resultado de la visita a {{ Str::before($datos['tienda'], ' -') }}</h1>
 
     <p>
@@ -42,7 +60,7 @@
 
     <h2>📊 Resultado por área</h2>
     <ul>
-        @foreach($datos['resumen_areas'] ?? [] as $area)
+        @foreach($resumenAreas as $area)
         <li><strong>{{ $area['nombre'] }}:</strong> {{ $area['puntos'] }} puntos (equivalente a {{ $area['estrellas'] }} estrellas)</li>
         @endforeach
     </ul>
@@ -80,10 +98,10 @@
     <p class="pregunta">
         <strong>{{ $nombre }}:</strong>
         @php
-        $valor = is_numeric($preg['respuesta']) ? floatval($preg['respuesta']) : null;
+        $valor = is_numeric($preg['respuesta']) ? intval($preg['respuesta']) : null;
         @endphp
-        @if (!is_null($valor))
-        {{ str_repeat('★', intval($valor / 0.2)) }}
+        @if (!is_null($valor) && $valor > 0)
+        {{ str_repeat('★', $valor) }}
         @else
         {{ $preg['respuesta'] ?? 'N/A' }}
         @endif
@@ -109,7 +127,7 @@
     <ul>
         @foreach($datos['kpis'] ?? [] as $kpi)
         @php
-        $esObservacion = \Illuminate\Support\Str::startsWith($kpi['codigo_pregunta'], 'OBS_');
+        $esObservacion = \Illuminate\Support\Str::startsWith(strtoupper($kpi['codigo_pregunta'] ?? ''), 'OBS_');
         $nombre = \App\Helpers\PreguntaHelper::nombreBonito($kpi['codigo_pregunta']);
         @endphp
 
@@ -119,12 +137,12 @@
         @endforeach
     </ul>
 
-    @if(collect($datos['kpis'] ?? [])->contains(fn($k) => \Illuminate\Support\Str::startsWith($k['codigo_pregunta'], 'OBS_')))
+    @if(collect($datos['kpis'] ?? [])->contains(fn($k) => \Illuminate\Support\Str::startsWith(strtoupper($k['codigo_pregunta'] ?? ''), 'OBS_')))
     <h3>Observaciones:</h3>
     <ul>
         @foreach($datos['kpis'] ?? [] as $kpi)
         @php
-        $esObservacion = \Illuminate\Support\Str::startsWith($kpi['codigo_pregunta'], 'OBS_');
+        $esObservacion = \Illuminate\Support\Str::startsWith(strtoupper($kpi['codigo_pregunta'] ?? ''), 'OBS_');
         @endphp
         @if ($esObservacion)
         <li>{{ $kpi['valor'] ?? 'Sin observaciones' }}</li>

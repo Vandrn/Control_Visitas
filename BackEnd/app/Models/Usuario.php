@@ -15,7 +15,7 @@ class Usuario
     protected $projectId = 'adoc-bi-dev';
 
     // Tabla principal de visitas
-    protected $visitasTable = 'GR_nuevo';
+    protected $visitasTable = 'GR_pruebas';
 
 
     public function __construct()
@@ -25,7 +25,7 @@ class Usuario
             'keyFilePath' => storage_path('app' . config('admin.bigquery.key_file')),
         ]);
     
-        $this->visitasTable = 'GR_nuevo';
+        $this->visitasTable = 'GR_pruebas';
     
         Log::info('✅ Tabla de visitas usada: ' . $this->visitasTable);
     }

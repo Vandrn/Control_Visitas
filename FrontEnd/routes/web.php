@@ -11,7 +11,16 @@ use Illuminate\Support\Facades\Route;
 Route::post('retail/guardar-seccion', [FormularioController::class, 'guardarSeccion'])->name('guardar.seccion');
 Route::get('/formulario', [FormularioController::class, 'mostrarFormulario'])->name('formulario');
 Route::post('/formulario', [FormularioController::class, 'mostrarFormulario'])->name('formulario');
-Route::get('/keep-alive', function () {
+
+// 🆕 NUEVOS ENDPOINTS POR SECCIÓN
+Route::post('retail/save-datos', [FormularioController::class, 'saveDatos'])->name('save.datos');
+Route::post('retail/save-seccion', [FormularioController::class, 'saveSeccionIndividual'])->name('save.seccion');
+Route::post('retail/save-main-fields', [FormularioController::class, 'saveMainFields'])->name('save.main.fields');
+Route::post('retail/save-kpis', [FormularioController::class, 'saveKPIs'])->name('save.kpis');
+Route::post('retail/save-planes', [FormularioController::class, 'savePlanes'])->name('save.planes');
+Route::post('retail/finalizar-formulario', [FormularioController::class, 'finalizarFormulario'])->name('finalizar.formulario');
+
+Route::get('/retail/keep-alive', function () {
     return response()->json(['alive' => true]);
 });
 

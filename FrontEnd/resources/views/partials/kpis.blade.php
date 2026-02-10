@@ -49,7 +49,7 @@
     </div>
 
     <div class="observaciones">
-        <label id="observacion" class="pregunta">7. Observaciones del área KPIs</label>
+        <label id="observacion" class="pregunta">7. Observaciones del Área KPIs</label>
         <br>
         <textarea class="texto" placeholder="Escriba sus observaciones aquí..." rows="4" cols="50" name="obs_06_01" required></textarea>
     </div>

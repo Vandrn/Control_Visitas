@@ -127,6 +127,14 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'technical_errors' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/errores-tecnicos.log'),
+            'level' => env('LOG_LEVEL', 'error'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

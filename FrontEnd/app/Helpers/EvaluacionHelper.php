@@ -63,7 +63,6 @@ class EvaluacionHelper
     // 2️⃣ Calcula el puntaje total ponderado y estrellas
     public static function calcularTotalPonderado(array $promedios): array
     {
-        // Pesos establecidos manualmente según número de preguntas
         $pesos = [
             'operaciones' => 0.40,
             'administracion' => 0.127,
@@ -72,22 +71,33 @@ class EvaluacionHelper
             'kpi' => 0.109,
         ];
 
-        $puntajeTotal = 0;
+        // ✅ Normalizar llaves: minúsculas + sin acentos
+        $promediosNorm = [];
+        foreach ($promedios as $key => $val) {
+            $k = strtolower($key);
+            $k = strtr($k, [
+                'á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ñ'=>'n',
+                'ä'=>'a','ë'=>'e','ï'=>'i','ö'=>'o','ü'=>'u'
+            ]);
+            $promediosNorm[$k] = $val;
+        }
+
+        $puntajeTotal = 0.0;
         foreach ($pesos as $area => $peso) {
-            if (isset($promedios[$area]['promedio'])) {
-                $puntajeTotal += $promedios[$area]['promedio'] * $peso;
+            if (isset($promediosNorm[$area]['promedio']) && is_numeric($promediosNorm[$area]['promedio'])) {
+                $puntajeTotal += ((float)$promediosNorm[$area]['promedio']) * $peso;
             }
         }
 
-        // Redondeamos a 2 decimales
         $puntajeTotal = round($puntajeTotal, 2);
 
-        // Convertimos a estrellas (1 estrella = 0.2 puntos)
-        $estrellas = intval(round($puntajeTotal / 0.2));
+        // ✅ Clamp estrellas 0..5 por si acaso
+        $estrellas = (int) max(0, min(5, round($puntajeTotal / 0.2)));
 
         return [
             'puntaje' => $puntajeTotal,
             'estrellas' => $estrellas,
         ];
     }
+
 }

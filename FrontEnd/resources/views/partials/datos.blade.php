@@ -5,10 +5,9 @@
             <option value="">Seleccione un correo</option>
             <option value="wilber.hernandez@empresasadoc.com">wilber.hernandez@empresasadoc.com</option>
             <option value="belen.perez@empresasadoc.com">belen.perez@empresasadoc.com</option>
-            <option value="guillermo.gudiel@empresasadoc.com">guillermo.gudiel@empresasadoc.com</option>
             <option value="edwin.flores@empresasadoc.com">edwin.flores@empresasadoc.com</option>
-            <option value="sandra.rivera@empresasadoc.com">sandra.rivera@empresasadoc.com</option>
             <option value="wilber.gonzalez@empresasadoc.com">wilber.gonzalez@empresasadoc.com</option>
+            <option value="sandra.rivera@empresasadoc.com">sandra.rivera@empresasadoc.com</option>
             <option value="juan.chavez@empresasadoc.com">juan.chavez@empresasadoc.com</option>
             <option value="elizabeth.delaroca@empresasadoc.com">elizabeth.delaroca@empresasadoc.com</option>
             <option value="ingrid.herrera@empresasadoc.com">ingrid.herrera@empresasadoc.com</option>
@@ -17,13 +16,13 @@
             <option value="ingrid.ostorga@empresasadoc.com">ingrid.ostorga@empresasadoc.com</option>
             <option value="rebeca.infante@empresasadoc.com">rebeca.infante@empresasadoc.com</option>
             <option value="dennis.vargas@empresasadoc.com">dennis.vargas@empresasadoc.com</option>
-            <option value="kendry.solorzano@empresasadoc.com">kendry.solorzano@empresasadoc.com</option>
+            <option value="dunia.erazo@empresasadoc.com">dunia.erazo@empresasadoc.com</option>
             <option value="daniela.meza@empresasadoc.com">daniela.meza@empresasadoc.com</option>
             <option value="erick.cruz@empresasadoc.com">erick.cruz@empresasadoc.com</option>
             <option value="yilka.miranda@empresasadoc.com">yilka.miranda@empresasadoc.com</option>
             <option value="otro">Otro...</option>
         </select>
-        <input type="email" id="correo_tienda_otro" name="correo_tienda" class="form-control mt-2" placeholder="Escribe el correo de la persona que realizó la visita" style="display:none;" pattern="^[a-zA-Z0-9._%+\-]+@empresasadoc.com$">
+        <input type="email" id="correo_tienda_otro" name="correo_tienda" class="form-control mt-2" placeholder="Escribe el correo de la persona que realiz贸 la visita" style="display:none;" pattern="^[a-zA-Z0-9._%+\-]+@empresasadoc.com$">
     </div>
 
     <div class="form-group" id="modalidad-group">

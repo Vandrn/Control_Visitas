@@ -5,7 +5,7 @@
 
     <br><br><br>
     @php
-    // 🔵 Preguntas con imagen por sección según marcadas en azul
+    // 馃數 Preguntas con imagen por secci贸n seg煤n marcadas en azul
     $preguntasConImagen = [
     2 => [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22], // Operaciones
     4 => [1, 2, 5, 6, 7, 8, 9], // Producto
@@ -14,7 +14,7 @@
     @endphp
 
     @php
-    //Preguntas no aplicables por sección
+    //Preguntas no aplicables por secci贸n
     $preguntasNoAplica = [
     4 => [7, 8], // Producto
     5 => [6, 7], // Personal
@@ -25,8 +25,14 @@
     @php
     $idPregunta = 'preg_' . str_pad($seccion, 2, '0', STR_PAD_LEFT) . '_' . str_pad($index + 1, 2, '0', STR_PAD_LEFT);
     $nombreObservacion = 'obs_' . str_pad($seccion, 2, '0', STR_PAD_LEFT) . '_01';
-    $nombreImagen = 'IMG_OBS_' . strtoupper(substr($titulo, 0, 3)) ; // IMG_OBS_OPR, IMG_OBS_ADM, etc.
-    $imagenesGuardadas = json_decode($resultado->$nombreImagen ?? '[]', true); // Obtener imágenes guardadas
+    $obsMap = [
+        2 => 'IMG_OBS_OPE',
+        3 => 'IMG_OBS_ADM',
+        4 => 'IMG_OBS_PRO',
+        5 => 'IMG_OBS_PER',
+    ];
+    $nombreImagen = $obsMap[(int)$seccion] ?? ('IMG_OBS_' . strtoupper(substr($titulo, 0, 3)));
+    $imagenesGuardadas = json_decode($resultado->$nombreImagen ?? '[]', true); // Obtener im谩genes guardadas
     $nombreImagenIndividual = 'IMG_' . str_pad($seccion, 2, '0', STR_PAD_LEFT) . '_' . str_pad($index + 1, 2, '0', STR_PAD_LEFT);
     @endphp
 
@@ -43,7 +49,7 @@
             <br>
         </div>
     </div>
-    <!-- Mostrar imágenes guardadas -->
+    <!-- Mostrar im谩genes guardadas -->
     @if (!empty($imagenesGuardadas))
     <div class="imagenes-guardadas">
         @foreach ($imagenesGuardadas as $imagen)
@@ -78,7 +84,7 @@
                 id="{{ $nombreImagenIndividual }}"
                 multiple
                 accept="image/*"
-                required
+                
             >
         </div>
     @endif

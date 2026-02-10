@@ -1,4 +1,37 @@
 $(document).ready(function () {
+    // 🆕 FUNCIÓN PARA DETECTAR ERRORES TÉCNICOS
+    function esErrorTecnico(mensaje) {
+        if (!mensaje) return false;
+        
+        // Palabras clave que indican errores técnicos/del servidor
+        const palabrasClaveTecnicas = [
+            'STRUCT', 'JSON', 'type', 'Type', 'undefined', 'Value of type',
+            'exception', 'INVALID_ARGUMENT', 'SYNTAX_ERROR',
+            'PARSE', 'parsing', 'unexpected', 'Unexpected', 'Cannot',
+            'cannot', 'must', 'required', 'constraint', 'foreign key',
+            'database', 'BigQuery', 'SQL', 'query', 'parameter', 'token',
+            'MERGE', 'INSERT', 'UPDATE', 'DELETE', 'invalidQuery', 'FAILED'
+        ];
+        
+        return palabrasClaveTecnicas.some(palabra => mensaje.includes(palabra));
+    }
+
+    // 🆕 FUNCIÓN PARA LIMPIAR MENSAJE DE ERROR
+    function obtenerMensajeUsuario(errorMessage, tipo = 'error') {
+        console.error('❌ Error capturado:', errorMessage);
+        
+        if (tipo === 'error' && esErrorTecnico(errorMessage)) {
+            console.warn('⚠️ Es error técnico - mostrando mensaje amigable');
+            return 'Hubo un problema técnico. Por favor, contacta al administrador.';
+        }
+        
+        // Si no es técnico, devolver el mensaje original
+        return errorMessage || 'Ocurrió un error. Por favor, intenta de nuevo.';
+    }
+
+    // 🆕 VARIABLE GLOBAL PARA SESSION_ID
+    let formularioSessionId = null;
+    
     // Modalidad: Virtual o Presencial
     let modalidadSeleccionada = '';
     $(document).on('click', '.modalidad-btn', function() {
@@ -164,6 +197,25 @@ $(document).ready(function () {
     let secciones = ["intro", "datos", "seccion-1", "intro-2", "seccion-2", "intro-3", "seccion-3", "intro-4", "seccion-4", "intro-5", "seccion-5", "seccion-6", "seccion-7"];
     let indiceActual = 0;
 
+    // 🆕 SISTEMA DE TRACKING: Qué secciones ya fueron guardadas exitosamente
+    const seccionesGuardadas = new Set();
+
+    // 🆕 MAPEO DE NOMBRES REALES DE SECCIONES
+    const seccionesMap = {
+        'seccion-2': 'Operaciones',
+        'seccion-3': 'Administración',
+        'seccion-4': 'Producto',
+        'seccion-5': 'Personal',
+        'seccion-6': 'KPIs',
+        'seccion-7': 'Final'
+    };
+
+    // 🆕 SECCIONES SIN IMÁGENES
+    const seccionesSinImagenes = ['seccion-3', 'seccion-6']; // Admin y KPIs
+    
+    // 🆕 SECCIONES CON OPCIÓN "NO APLICA"
+    const seccionesConNoAplica = ['seccion-4', 'seccion-5']; // Producto y Personal
+
     function mostrarSeccion(indice) {
         secciones.forEach((seccion, i) => {
             let elemento = $("#" + seccion);
@@ -204,7 +256,7 @@ $(document).ready(function () {
 
                 if (files.length === 0) return;
                 if (subidaEnProceso) {
-                    mostrarNotificacion('⏳ Por favor espere a que termine la subida anterior', 'warning');
+                    mostrarNotificacion('La imagen anterior se está subiendo. Por favor, espera a que termine.', 'warning');
                     return;
                 }
 
@@ -217,7 +269,7 @@ $(document).ready(function () {
                         const file = files[i];
 
                         if (!file.type.startsWith('image/')) {
-                            mostrarNotificacion(`❌ El archivo ${file.name} no es una imagen`, 'error');
+                            mostrarNotificacion(`El archivo "${file.name}" no es válido. Por favor, sube una imagen (JPG, PNG, etc.).`, 'error');
                             continue;
                         }
 
@@ -229,7 +281,9 @@ $(document).ready(function () {
                         const indexedFieldName = `${fieldName}_${String(index + 1).padStart(2, '0')}`;
 
                         const url = await comprimirYSubirImagen(file, indexedFieldName, $input);
-                        imagenesSubidas[fieldName].push(url);
+                        if (url && url.trim() !== '') { // 🆕 SOLO AGREGAR SI ES VÁLIDA
+                            imagenesSubidas[fieldName].push(url);
+                        }
                     }
 
                     return;
@@ -239,7 +293,7 @@ $(document).ready(function () {
                     const file = files[i];
 
                     if (!file.type.startsWith('image/')) {
-                        mostrarNotificacion(`❌ El archivo ${file.name} no es una imagen`, 'error');
+                        mostrarNotificacion(`El archivo "${file.name}" no es válido. Por favor, sube una imagen (JPG, PNG, etc.).`, 'error');
                         continue;
                     }
 
@@ -251,7 +305,9 @@ $(document).ready(function () {
                     const indexedFieldName = `${fieldName}_${String(index + 1).padStart(2, '0')}`;
 
                     const url = await comprimirYSubirImagen(file, indexedFieldName, $input);
-                    imagenesSubidas[fieldName].push(url);
+                    if (url && url.trim() !== '') { // 🆕 SOLO AGREGAR SI ES VÁLIDA
+                        imagenesSubidas[fieldName].push(url);
+                    }
                 }
             });
         });
@@ -287,7 +343,7 @@ $(document).ready(function () {
 
         } catch (error) {
             console.error('Error en compresión/subida:', error);
-            mostrarNotificacion(`❌ ${error.message}`, 'error');
+            mostrarNotificacion(`No se pudo subir la imagen. Verifica que el archivo sea válido e intenta de nuevo.`, 'error');
             $input.val(''); // Limpiar input en caso de error
         } finally {
             subidaEnProceso = false;
@@ -499,281 +555,543 @@ $(document).ready(function () {
         }
     }
 
-    // Recopilar respuestas antes de guardar
-    function obtenerEstructuraFinal() {
-        transformarValoresRadio(); // Asegúrate de tener los valores transformados
-
-        const seccionesMap = {};
-        const kpis = [];
-        const planes = [];
-        const imagenes = imagenesSubidas || {};
-        const mapaCampos = {
-            "preg_02_01": "PREG_01_01",
-            "preg_02_02": "PREG_01_02",
-            "preg_02_03": "PREG_01_03",
-            "preg_02_04": "PREG_01_04",
-            "preg_02_05": "PREG_01_05",
-            "preg_02_06": "PREG_01_06",
-            "preg_02_07": "PREG_01_07",
-            "preg_02_08": "PREG_01_08",
-            "preg_02_09": "PREG_01_09",
-            "preg_02_10": "PREG_01_10",
-            "preg_02_11": "PREG_01_11",
-            "preg_02_12": "PREG_01_12",
-            "preg_02_13": "PREG_01_13",
-            "preg_02_14": "PREG_01_14",
-            "preg_02_15": "PREG_01_15",
-            "preg_02_16": "PREG_01_16",
-            "preg_02_17": "PREG_01_17",
-            "preg_02_18": "PREG_01_18",
-            "preg_02_19": "PREG_01_19",
-            "preg_02_20": "PREG_01_20",
-            "preg_02_21": "PREG_01_21",
-            "preg_02_22": "PREG_01_22",
-            "obs_02_01": "OBS_01_01",
-            "preg_03_01": "PREG_02_01",
-            "preg_03_02": "PREG_02_02",
-            "preg_03_03": "PREG_02_03",
-            "preg_03_04": "PREG_02_04",
-            "preg_03_05": "PREG_02_05",
-            "preg_03_06": "PREG_02_06",
-            "preg_03_07": "PREG_02_08",
-            "obs_03_01": "OBS_02_01",
-            "preg_04_01": "PREG_03_01",
-            "preg_04_02": "PREG_03_02",
-            "preg_04_03": "PREG_03_03",
-            "preg_04_04": "PREG_03_04",
-            "preg_04_05": "PREG_03_05",
-            "preg_04_06": "PREG_03_06",
-            "preg_04_07": "PREG_03_07",
-            "preg_04_08": "PREG_03_08",
-            "preg_04_09": "PREG_03_09",
-            "obs_04_01": "OBS_03_01",
-            "preg_05_01": "PREG_04_02",
-            "preg_05_02": "PREG_04_03",
-            "preg_05_03": "PREG_04_05",
-            "preg_05_04": "PREG_04_06",
-            "preg_05_05": "PREG_04_07",
-            "preg_05_06": "PREG_04_08",
-            "preg_05_07": "PREG_04_09",
-            "preg_05_08": "PREG_04_10",
-            "preg_05_09": "PREG_04_11",
-            "preg_05_10": "PREG_04_12",
-            "preg_05_11": "PREG_04_13",
-            "preg_05_12": "PREG_04_14",
-            "preg_05_13": "PREG_04_15",
-            "preg_05_14": "PREG_04_16",
-            "obs_05_01": "OBS_04_01",
-            "preg_06_01": "PREG_05_01",
-            "preg_06_02": "PREG_05_02",
-            "preg_06_03": "PREG_05_03",
-            "preg_06_04": "PREG_05_04",
-            "preg_06_05": "PREG_05_05",
-            "preg_06_06": "PREG_05_06",
-            "obs_06_01": "OBS_05_01"
-        };
-
-        // Recolectar preguntas normales y observaciones
-        $("input, select, textarea").not("input[type='file']").each(function () {
-            const $el = $(this);
-            const rawName = $el.attr("name");
-            if (!rawName) return;
-
-            let valor = null;
-
-            if ($el.is(":radio") && $el.is(":checked")) {
-                valor = $el.attr("data-transformado") || $el.val();
-            } else if (!$el.is(":radio")) {
-                valor = $el.val();
+    /**
+     * 🆕 GUARDAR "DATOS" (correo, modalidad, ubicación, etc)
+     * Se ejecuta en la vista "datos"
+     * Retorna: Promise<boolean>
+     */
+    function guardarDatos() {
+        return new Promise((resolve) => {
+            // Extraer tienda (opción seleccionada)
+            let tiendaVal = '';
+            const tiendaSelect = $("#CRM_ID_TIENDA option:selected");
+            if (tiendaSelect.length) {
+                const val = tiendaSelect.val();
+                const ubicacion = tiendaSelect.data("ubicacion") || '';
+                tiendaVal = val ? (val + (ubicacion ? " - " + ubicacion : "")) : '';
             }
 
-            if (!valor || valor.trim() === "") return;
+            // Extraer país
+            let paisVal = '';
+            const paisSelect = $("#pais option:selected");
+            if (paisSelect.length) {
+                paisVal = paisSelect.data("nombre") || paisSelect.val() || '';
+            }
 
-            const codigo = mapaCampos[rawName] || rawName;
+            // Extraer zona
+            let zonaVal = $("#zona").val() || '';
 
-            // Detectar sección por código
-            const seccionMatch = codigo.match(/^(PREG|OBS)_([0-9]{2})_/);
-            if (seccionMatch) {
-                const seccionKey = seccionMatch[2]; // ej: '01'
-                const seccionNombre = {
-                    "01": "operaciones",
-                    "02": "administracion",
-                    "03": "producto",
-                    "04": "personal",
-                    "05": "kpi",
-                    "06": "otros"
-                }[seccionKey] || `seccion_${seccionKey}`;
-                if (seccionNombre === "kpi") return; // Evitar duplicar KPIs en secciones
-                if (!seccionesMap[seccionNombre]) seccionesMap[seccionNombre] = [];
-
-                // Convertir código de pregunta a código de imagen
-                let codigoImg = '';
-                if (codigo.startsWith('PREG_')) {
-                    // PREG_01_01 → IMG_02_01
-                    const partes = codigo.split('_');
-                    if (partes.length === 3) {
-                        const seccionInterna = String(parseInt(partes[1]) + 1).padStart(2, '0');
-                        codigoImg = `IMG_${seccionInterna}_${partes[2]}`;
+            const datosEnvio = {
+                fecha_hora_inicio: $("#fecha_inicio").val(),
+                correo_realizo: (function() {
+                    var sel = $("#correo_tienda_select");
+                    if (sel.length && sel.val() === 'otro') {
+                        return $("#correo_tienda_otro").val();
+                    } else if (sel.length) {
+                        return sel.val();
+                    } else {
+                        return $("#correo_tienda").val();
                     }
-                } else if (codigo.startsWith('OBS_')) {
-                    const mapeoObs = {
-                        'OBS_01_01': 'IMG_OBS_OPE',
-                        'OBS_02_01': 'IMG_OBS_ADM',
-                        'OBS_03_01': 'IMG_OBS_PRO',
-                        'OBS_04_01': 'IMG_OBS_PER',
-                    };
-                    codigoImg = mapeoObs[codigo] || '';
-                }
+                })(),
+                lider_zona: $("#jefe_zona").val(),
+                tienda: tiendaVal,
+                ubicacion: $("#ubicacion").val(),
+                pais: paisVal,
+                zona: zonaVal,
+                modalidad_visita: $('#modalidad_visita').val()
+            };
 
-                const imagenesPregunta = Object.keys(imagenes)
-                    .filter(k => k.startsWith(codigoImg))
-                    .flatMap(k => imagenes[k] || []);
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-                seccionesMap[seccionNombre].push({
-                    codigo_pregunta: codigo,
-                    respuesta: valor,
-                    imagenes: imagenesPregunta
-                });
-            }
-        });
-
-        // Recolectar KPIs como bloque separado
-        // Recolectar KPIs como bloque separado
-        for (let i = 1; i <= 6; i++) {
-            const nombreCampo = `preg_06_0${i}`;
-            const cod = mapaCampos[nombreCampo] || nombreCampo;
-            const val = $(`input[name="${nombreCampo}"]:checked`).val();
-            const variacion = $(`input[name="var_06_0${i}"]`).val();
-
-            if (val && variacion !== "") {
-                kpis.push({
-                    codigo_pregunta: cod,
-                    valor: val,
-                    variacion: variacion
-                });
-            }
-        }
-
-        // Agregar observación KPI como un KPI especial
-        const obsKPI = $(`textarea[name="obs_06_01"]`).val();
-        if (obsKPI && obsKPI.trim() !== "") {
-            kpis.push({
-                codigo_pregunta: "OBS_KPI",
-                valor: obsKPI.trim(),
-                variacion: ""
+            console.log('📤 Guardando DATOS iniciales...', datosEnvio);
+            console.log('✅ Valores extraídos:', {
+                tienda: tiendaVal,
+                pais: paisVal,
+                zona: zonaVal
             });
-        }
 
-        // Recolectar Planes de Acción
-        for (let i = 1; i <= 2; i++) {
-            const desc = $(`input[name="PLAN_0${i}"]`).val();
-            const fecha = $(`input[name="FECHA_PLAN_0${i}"]`).val();
-            if (desc && fecha) {
-                planes.push({
-                    descripcion: desc,
-                    fecha_cumplimiento: fecha
-                });
-            }
-        }
-        // Recolectar plan adicional opcional
-        const descAdicional = $(`input[name="PLAN_03"]`).val();
-        const fechaAdicional = $(`input[name="FECHA_PLAN_03"]`).val();
-        if (descAdicional && fechaAdicional) {
-            planes.push({
-                descripcion: descAdicional,
-                fecha_cumplimiento: fechaAdicional
-            });
-        }
+            // Mostrar notificación de cargando
+            const notifGuardando = mostrarNotificacion('Guardando datos por favor espera...', 'loading', true);
 
-
-        // Recolectar datos generales
-        let tienda = $("#CRM_ID_TIENDA option:selected");
-        let pais = $("#pais option:selected").data("nombre");
-        let datosFinales = {
-            session_id: crypto.randomUUID(),
-            correo_realizo: (function() {
-                var sel = $("#correo_tienda_select");
-                if (sel.length && sel.val() === 'otro') {
-                    return $("#correo_tienda_otro").val();
-                } else if (sel.length) {
-                    return sel.val();
-                } else {
-                    return $("#correo_tienda").val();
-                }
-            })(),
-            lider_zona: $("#jefe_zona").val(),
-            tienda: tienda.val() + " - " + tienda.data("ubicacion"),
-            ubicacion: $("#ubicacion").val(),
-            pais: pais,
-            zona: $("#zona").val(),
-            fecha_hora_inicio: $("#fecha_inicio").val(),
-            fecha_hora_fin: new Date().toISOString(),
-            modalidad_visita: $('#modalidad_visita').val(),
-            secciones: Object.entries(seccionesMap).map(([nombre, preguntas]) => ({
-                nombre_seccion: nombre,
-                preguntas: preguntas
-            })),
-            kpis: kpis,
-            planes: planes
-        };
-
-        console.log("📦 Estructura final lista para enviar:", datosFinales);
-        return datosFinales;
-    }
-    function guardarSeccion(datos) {
-
-        if (!datos) return;
-
-        // Mostrar el JSON final que se enviará al backend
-        console.log('📦 JSON final a enviar al backend:', JSON.stringify(datos, null, 2));
-
-        const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-        // 🚫 MOSTRAR RESUMEN DE IMÁGENES ANTES DE ENVIAR
-        const imagenesResumen = Object.keys(imagenesSubidas).length;
-        if (imagenesResumen > 0) {
-            console.log(`📷 Imágenes subidas previamente: ${imagenesResumen}`);
-            Object.entries(imagenesSubidas).forEach(([campo, url]) => {
-                console.log(`  ✅ ${campo}: ${url}`);
-            });
-        }
-
-        fetch('/retail/guardar-seccion', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': token,
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify(datos),
-          credentials: 'same-origin'
-        }).then(async response => {
-            if (response.ok) {
-                return response.json();
-            } else {
-                // Intentar extraer el mensaje de error del backend
-                let errorMsg = "Error al guardar: " + response.status;
-                try {
-                    const data = await response.json();
-                    if (data && data.error) {
-                        errorMsg = data.error;
-                    }
-                } catch (e) {}
-                throw new Error(errorMsg);
-            }
-        })
+            fetch('/retail/save-datos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(datosEnvio),
+                credentials: 'same-origin'
+            })
+            .then(response => response.json())
             .then(data => {
-                console.log("✅ Formulario guardado exitosamente:", data);
-                mostrarNotificacion('✅ Formulario enviado correctamente', 'success');
+                if (data.success && data.session_id) {
+                    formularioSessionId = data.session_id;
+                    sessionStorage.setItem('form_session_id', formularioSessionId);
+                    
+                    console.log('✅ Registro inicial creado:', {
+                        session_id: formularioSessionId
+                    });
 
-                // 🧹 Limpiar URLs de imágenes de la memoria
-                imagenesSubidas = {};
-                console.log("🧹 Cache de imágenes limpiado");
+                    actualizarNotificacionPermanente(notifGuardando, '✅ Datos guardados correctamente', 'success');
+                    setTimeout(() => cerrarNotificacion(notifGuardando), 2000);
+                    resolve(true);
+                } else {
+                    console.error('❌ Error:', data.message);
+                    const mensajeUsuario = obtenerMensajeUsuario(data.message);
+                    actualizarNotificacionPermanente(notifGuardando, mensajeUsuario, 'error');
+                    setTimeout(() => cerrarNotificacion(notifGuardando), 3000);
+                    resolve(false);
+                }
             })
             .catch(error => {
-                console.error("❌ Error al enviar los datos:", error);
-                mostrarNotificacion('❌ ' + (error.message || 'Error al enviar el formulario'), 'error');
+                console.error('❌ Error en guardarDatos:', error);
+                actualizarNotificacionPermanente(notifGuardando, 'Error de conexión. Verifica tu internet e intenta de nuevo.', 'error');
+                setTimeout(() => cerrarNotificacion(notifGuardando), 3000);
+                resolve(false);
             });
+        });
+    }
+
+    /**
+     * 🆕 GUARDAR SECCIÓN INDIVIDUAL (seccion-2, seccion-3, etc)
+     * ESPECIAL para seccion-1: Solo actualiza pais, zona, tienda (no se guarda como sección)
+     * Retorna: Promise<boolean>
+     */
+    
+    // 🆕 VARIABLE PARA GUARDAR DATOS DE SECCION-1
+    let datosSeccion1 = {};
+
+    function guardarSeccionActual() {
+        return new Promise((resolve) => {
+            const nombreSeccionId = secciones[indiceActual]; // ej: "seccion-2"
+            
+            // 🆕 VERIFICAR SI ESTA SECCIÓN YA FUE GUARDADA
+            if ((nombreSeccionId === 'seccion-6' || nombreSeccionId === 'seccion-7') && seccionesGuardadas.has(nombreSeccionId)) {
+                console.log(`⏭️ Sección ${nombreSeccionId} ya fue guardada, saltando...`);
+                resolve(true);
+                return;
+            }
+            
+            // 🆕 ESPECIAL PARA SECCION-1: Solo capturar pais/zona/tienda UNA VEZ
+            if (nombreSeccionId === 'seccion-1') {
+                console.log('✅ Capturando datos de Seccion-1 para guardar en registro principal');
+                
+                // Extraer tienda (opción seleccionada)
+                let tiendaVal = '';
+                const tiendaSelect = $("#CRM_ID_TIENDA option:selected");
+                if (tiendaSelect.length) {
+                    const val = tiendaSelect.val();
+                    const ubicacion = tiendaSelect.data("ubicacion") || '';
+                    tiendaVal = val ? (val + (ubicacion ? " - " + ubicacion : "")) : '';
+                }
+
+                // Extraer país
+                let paisVal = '';
+                const paisSelect = $("#pais option:selected");
+                if (paisSelect.length) {
+                    paisVal = paisSelect.data("nombre") || paisSelect.val() || '';
+                }
+
+                // Extraer zona
+                let zonaVal = $("#zona").val() || '';
+
+                datosSeccion1 = {
+                    pais: paisVal,
+                    zona: zonaVal,
+                    tienda: tiendaVal
+                };
+
+                // 🆕 ACTUALIZAR REGISTRO PRINCIPAL CON ESTOS DATOS
+                if (formularioSessionId) {
+                    const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                    
+                    const notifGuardando = mostrarNotificacion('Guardando datos por favor espera...', 'loading', true);
+                    
+                    fetch('/retail/save-main-fields', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': token,
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            session_id: formularioSessionId,
+                            main_fields: datosSeccion1
+                        }),
+                        credentials: 'same-origin'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            console.log('✅ Campos principales (pais/zona/tienda) guardados correctamente');
+                            actualizarNotificacionPermanente(notifGuardando, '✅ Datos guardados correctamente', 'success');
+                            setTimeout(() => cerrarNotificacion(notifGuardando), 2000);
+                            resolve(true);
+                        } else {
+                            console.error('❌ Error:', data.message);
+                            const mensajeUsuario = obtenerMensajeUsuario(data.message);
+                            actualizarNotificacionPermanente(notifGuardando, mensajeUsuario, 'error');
+                            setTimeout(() => cerrarNotificacion(notifGuardando), 3000);
+                            resolve(false);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('❌ Error en save-main-fields:', error);
+                        actualizarNotificacionPermanente(notifGuardando, 'Error de conexión. Verifica tu internet e intenta de nuevo.', 'error');
+                        setTimeout(() => cerrarNotificacion(notifGuardando), 3000);
+                        resolve(false);
+                    });
+                } else {
+                    resolve(true);
+                }
+                return;
+            }
+
+            // 🆕 ESPECIAL PARA SECCION-6 (KPIs): Guardar en endpoint diferente
+            if (nombreSeccionId === 'seccion-6') {
+                console.log('📊 Capturando KPIs desde seccion-6');
+                
+                if (!formularioSessionId) {
+                    formularioSessionId = sessionStorage.getItem('form_session_id');
+                }
+
+                if (!formularioSessionId) {
+                    mostrarNotificacion('Tu sesión ha expirado. Por favor, recarga la página y comienza de nuevo.', 'error');
+                    resolve(false);
+                    return;
+                }
+
+                // Extraer KPIs: emparejar preg_06_XX con var_06_XX
+                const kpis = [];
+                for (let i = 1; i <= 6; i++) {
+                    const prefijo = String(i).padStart(2, '0');
+                    const pregVal = $(`input[name="preg_06_${prefijo}"]:checked`).val();
+                    const varVal = $(`input[name="var_06_${prefijo}"]`).val();
+                    
+                    if (pregVal && varVal && varVal.trim() !== '') {
+                        kpis.push({
+                            codigo_pregunta: `preg_06_${prefijo}`,
+                            valor: pregVal,
+                            variacion: varVal
+                        });
+                    }
+                }
+
+                // Agregar observación de KPI si existe
+                const obsKPI = $(`textarea[name="obs_06_01"]`).val();
+                if (obsKPI && obsKPI.trim() !== '') {
+                    kpis.push({
+                        codigo_pregunta: 'obs_06_01',
+                        valor: obsKPI.trim(),
+                        variacion: ''
+                    });
+                }
+
+                const datosEnvio = {
+                    session_id: formularioSessionId,
+                    kpis: kpis
+                };
+
+                const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+                console.log('📤 Guardando KPIs:', datosEnvio);
+
+                const notifGuardando = mostrarNotificacion('Guardando datos por favor espera...', 'loading', true);
+
+                fetch('/retail/save-kpis', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': token,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(datosEnvio),
+                    credentials: 'same-origin'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('✅ KPIs guardados correctamente');
+                        seccionesGuardadas.add('seccion-6');
+                        sessionStorage.setItem('form_kpis', JSON.stringify(kpis));
+                        // 🆕 LIMPIAR VALORES DE KPIs PARA EVITAR DUPLICADOS
+                        for (let i = 1; i <= 6; i++) {
+                            const prefijo = String(i).padStart(2, '0');
+                            $(`input[name="preg_06_${prefijo}"]`).prop('checked', false);
+                            $(`input[name="var_06_${prefijo}"]`).val('');
+                        }
+                        $(`textarea[name="obs_06_01"]`).val('');
+                        
+                        actualizarNotificacionPermanente(notifGuardando, '✅ KPIs guardados correctamente', 'success');
+                        setTimeout(() => cerrarNotificacion(notifGuardando), 2000);
+                        resolve(true);
+                    } else {
+                        console.error('❌ Error:', data.message);
+                        const mensajeUsuario = obtenerMensajeUsuario(data.message);
+                        actualizarNotificacionPermanente(notifGuardando, mensajeUsuario, 'error');
+                        setTimeout(() => cerrarNotificacion(notifGuardando), 3000);
+                        resolve(false);
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Error en save-kpis:', error);
+                    actualizarNotificacionPermanente(notifGuardando, 'Error de conexión. Verifica tu internet e intenta de nuevo.', 'error');
+                    setTimeout(() => cerrarNotificacion(notifGuardando), 3000);
+                    resolve(false);
+                });
+                return;
+            }
+
+            // 🆕 ESPECIAL PARA SECCION-7 (Planes): Guardar TODO de una vez
+            if (nombreSeccionId === 'seccion-7') {
+                console.log('📋 Guardando Planes, KPIs, Secciones y finalizando');
+                
+                if (!formularioSessionId) {
+                    formularioSessionId = sessionStorage.getItem('form_session_id');
+                }
+
+                if (!formularioSessionId) {
+                    mostrarNotificacion('Tu sesión ha expirado. Por favor, recarga la página y comienza de nuevo.', 'error');
+                    resolve(false);
+                    return;
+                }
+
+                // Extraer Planes: emparejar PLAN_XX con FECHA_PLAN_XX
+                const planes = [];
+                for (let i = 1; i <= 3; i++) {
+                    const prefijo = String(i).padStart(2, '0');
+                    const descVal = $(`input[name="PLAN_${prefijo}"]`).val();
+                    const fechaVal = $(`input[name="FECHA_PLAN_${prefijo}"]`).val();
+                    
+                    if (descVal && fechaVal && descVal.trim() !== '' && fechaVal.trim() !== '') {
+                        planes.push({
+                            descripcion: descVal.trim(),
+                            fecha_cumplimiento: fechaVal.trim()
+                        });
+                    }
+                }
+
+                // 🆕 Obtener secciones y KPIs guardados desde sessionStorage
+                const secciones = JSON.parse(sessionStorage.getItem('form_secciones') || '{}');
+                const kpis = JSON.parse(sessionStorage.getItem('form_kpis') || '[]');
+
+                const datosEnvio = {
+                    session_id: formularioSessionId,
+                    planes: planes,
+                    secciones: secciones,
+                    kpis: kpis
+                };
+
+                const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+                console.log('📤 Guardando TODO (Planes + KPIs + Secciones):', datosEnvio);
+
+                const notifGuardando = mostrarNotificacion('Finalizando formulario...', 'loading', true);
+
+                // 🆕 TODO EN UN SOLO ENDPOINT
+                fetch('/retail/save-planes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': token,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(datosEnvio),
+                    credentials: 'same-origin'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('✅ Formulario finalizado correctamente (todo en un paso)');
+                        seccionesGuardadas.add('seccion-7');
+                        
+                        // 🆕 LIMPIAR VALORES DE PLANES PARA EVITAR DUPLICADOS
+                        for (let i = 1; i <= 3; i++) {
+                            const prefijo = String(i).padStart(2, '0');
+                            $(`input[name="PLAN_${prefijo}"]`).val('');
+                            $(`input[name="FECHA_PLAN_${prefijo}"]`).val('');
+                        }
+                        
+                        actualizarNotificacionPermanente(notifGuardando, '✅ Formulario completado exitosamente', 'success');
+                        
+                        // 🆕 LIMPIAR STORAGE Y RECARGAR
+                        setTimeout(() => {
+                            sessionStorage.clear();
+                            window.location.href = window.location.href + (window.location.href.indexOf('?') > -1 ? '&' : '?') + 'nocache=' + Date.now();
+                        }, 1500);
+                        
+                        resolve(true);
+                    } else {
+                        console.error('❌ Error:', data.message);
+                        const mensajeUsuario = obtenerMensajeUsuario(data.message);
+                        actualizarNotificacionPermanente(notifGuardando, mensajeUsuario, 'error');
+                        setTimeout(() => cerrarNotificacion(notifGuardando), 3000);
+                        resolve(false);
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Error en save-planes:', error);
+                    actualizarNotificacionPermanente(notifGuardando, 'Error de conexión. Verifica tu internet e intenta de nuevo.', 'error');
+                    setTimeout(() => cerrarNotificacion(notifGuardando), 3000);
+                    resolve(false);
+                });
+                return;
+            }
+            
+            if (!formularioSessionId) {
+                formularioSessionId = sessionStorage.getItem('form_session_id');
+            }
+
+            if (!formularioSessionId) {
+                mostrarNotificacion('Tu sesión ha expirado. Por favor, recarga la página y comienza de nuevo.', 'error');
+                resolve(false);
+                return;
+            }
+
+            // 🆕 OBTENER NOMBRE REAL DE LA SECCIÓN
+            const nombreSeccionReal = seccionesMap[nombreSeccionId] || nombreSeccionId;
+
+            // Recolectar preguntas de la sección actual
+            const seccionElement = $("#" + nombreSeccionId);
+
+            // 🆕 VALIDAR IMÁGENES OBLIGATORIAS (excepto observaciones en todas)
+            const imagenesObligatorias = nombreSeccionId === 'seccion-2'; // Solo Operaciones tiene todas obligatorias
+            if (imagenesObligatorias) {
+                const imagenesFaltantes = [];
+                seccionElement.find("input[type='file']").not("input[name='IMG_OBS_OPE']").each(function () {
+                    const fieldName = $(this).attr('name').replace(/\[\]$/, '');
+                    const imagenesSubidasDelCampo = imagenesSubidas[fieldName] || [];
+                    if (imagenesSubidasDelCampo.length === 0) {
+                        imagenesFaltantes.push(fieldName);
+                    }
+                });
+                if (imagenesFaltantes.length > 0) {
+                    mostrarNotificacion(`Por favor, sube todas las imágenes requeridas para continuar.`, 'warning');
+                    resolve(false);
+                    return;
+                }
+            }
+            
+            // 🆕 VALIDAR IMÁGENES OPCIONALES DE PRODUCTO (solo si NO es "No aplica")
+            if (nombreSeccionId === 'seccion-4') {
+                const campos = ['preg_04_07', 'preg_04_08']; // Solo Producto
+                const imagenesFaltantes = [];
+                
+                campos.forEach(fieldName => {
+                    const valor = $(`input[name="${fieldName}"]:checked`).val();
+                    // Solo validar imagen si NO es "No aplica"
+                    if (valor && valor !== 'NA' && valor.trim() !== '') {
+                        const imagenFieldName = fieldName.replace('preg_', 'IMG_');
+                        const imagenesSubidasDelCampo = imagenesSubidas[imagenFieldName] || [];
+                        if (imagenesSubidasDelCampo.length === 0) {
+                            imagenesFaltantes.push(imagenFieldName);
+                        }
+                    }
+                });
+                
+                if (imagenesFaltantes.length > 0) {
+                    mostrarNotificacion(`Por favor, sube todas las imágenes requeridas para continuar.`, 'warning');
+                    resolve(false);
+                    return;
+                }
+            }
+            const preguntas = [];
+
+            seccionElement.find("input, select, textarea").not("input[type='file']").each(function () {
+                const $el = $(this);
+                const rawName = $el.attr("name");
+                if (!rawName || rawName.startsWith('IMG_')) return; // Saltar campos de imagen
+
+                let valor = null;
+
+                if ($el.is(":radio") && $el.is(":checked")) {
+                    valor = $el.val();
+                } else if (!$el.is(":radio")) {
+                    valor = $el.val();
+                }
+
+                if (!valor || valor.trim() === "") return;
+
+                // 🆕 DIFERENCIAR OBSERVACIONES Y MAPEAR CORRECTAMENTE LA IMAGEN
+                let imagenes = [];
+                
+                if (rawName.startsWith('obs_')) {
+                    // Mapeo de observación a nombre de imagen correcto
+                    const mapeoObsImagenes = {
+                        'obs_02_01': 'IMG_OBS_OPE', // Operaciones
+                        'obs_03_01': 'IMG_OBS_ADM', // Administración
+                        'obs_04_01': 'IMG_OBS_PRO', // Producto
+                        'obs_05_01': 'IMG_OBS_PER'  // Personal
+                    };
+                    
+                    const imagenFieldName = mapeoObsImagenes[rawName] || null;
+                    if (imagenFieldName) {
+                        // 🆕 GARANTIZAR QUE SIEMPRE SEA UN ARRAY (nunca null o undefined)
+                        imagenes = imagenesSubidas[imagenFieldName] ? [...imagenesSubidas[imagenFieldName]] : [];
+                    }
+                } else if (rawName.startsWith('preg_')) {
+                    // Para preguntas normales: preg_02_01 → IMG_02_01
+                    const imagenFieldName = rawName.replace('preg_', 'IMG_');
+                    // 🆕 GARANTIZAR QUE SIEMPRE SEA UN ARRAY (nunca null o undefined)
+                    imagenes = imagenesSubidas[imagenFieldName] ? [...imagenesSubidas[imagenFieldName]] : [];
+                }
+
+                preguntas.push({
+                    codigo_pregunta: rawName,
+                    respuesta: valor,
+                    imagenes: imagenes
+                });
+            });
+
+            const datosEnvio = {
+                session_id: formularioSessionId,
+                nombre_seccion: nombreSeccionReal, // 🆕 Usar nombre real
+                preguntas: preguntas
+            };
+
+            const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+            console.log(`📤 Guardando sección: ${nombreSeccionReal}`, datosEnvio);
+
+            const notifGuardando = mostrarNotificacion('Guardando datos por favor espera...', 'loading', true);
+
+            fetch('/retail/save-seccion', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(datosEnvio),
+                credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    seccionesGuardadas.add(nombreSeccionId);
+                    const seccionesGuardadasObj = JSON.parse(sessionStorage.getItem('form_secciones') || '{}');
+                    seccionesGuardadasObj[nombreSeccionReal] = preguntas;
+                    sessionStorage.setItem('form_secciones', JSON.stringify(seccionesGuardadasObj));
+                    console.log(`✅ Sección guardada: ${nombreSeccionReal}`);
+                    actualizarNotificacionPermanente(notifGuardando, `✅ ${nombreSeccionReal} guardada correctamente`, 'success');
+                    setTimeout(() => cerrarNotificacion(notifGuardando), 2000);
+                    resolve(true);
+                } else {
+                    console.error('❌ Error:', data.message);
+                    const mensajeUsuario = obtenerMensajeUsuario(data.message);
+                    actualizarNotificacionPermanente(notifGuardando, mensajeUsuario, 'error');
+                    setTimeout(() => cerrarNotificacion(notifGuardando), 3000);
+                    resolve(false);
+                }
+            })
+            .catch(error => {
+                console.error('❌ Error en guardarSeccionActual:', error);
+                actualizarNotificacionPermanente(notifGuardando, 'Error de conexión. Verifica tu internet e intenta de nuevo.', 'error');
+                setTimeout(() => cerrarNotificacion(notifGuardando), 3000);
+                resolve(false);
+            });
+        });
     }
 
     $(".btnSiguiente").click(function (event) {
@@ -814,45 +1132,6 @@ $(document).ready(function () {
         
         // Guardar modalidad en variable global para otras secciones
         window.__modalidad_visita = modalidadSeleccionada;
-        // 🆕 VALIDACIÓN DE IMÁGENES REQUERIDAS EN CADA SECCIÓN
-        // Busca inputs file visibles y requeridos en la sección actual
-        /*let imagenesFaltantes = [];
-        seccionActual.find("input[type='file'][required]").each(function (idx) {
-            const input = this;
-            const fieldName = input.name.replace(/\[\]$/, '');
-            let falta = false;
-            if (input.files.length === 0) {
-                falta = true;
-            } else {
-                const imagenesAsociadas = Object.keys(imagenesSubidas).filter(k => k.startsWith(fieldName));
-                if (imagenesAsociadas.length === 0) {
-                    falta = true;
-                }
-            }
-            if (falta) {
-                // Buscar label asociada
-                let label = $(input).closest('.form-group, .mb-4, .mb-3').find('label').first().text().trim();
-                if (!label) {
-                    // Si no hay label, usar placeholder si existe
-                    if (input.placeholder) {
-                        label = input.placeholder;
-                    } else {
-                        // Si no hay placeholder, extraer número de la pregunta del nombre técnico
-                        let match = fieldName.match(/(\d{2,})$/);
-                        if (match) {
-                            label = `Pregunta ${parseInt(match[1], 10)}`;
-                        } else {
-                            label = fieldName;
-                        }
-                    }
-                }
-                imagenesFaltantes.push(label);
-            }
-        });
-        if (imagenesFaltantes.length > 0) {
-            mostrarNotificacion(`⚠️ Debe subir la(s) imagen(es) requerida(s):<br>${imagenesFaltantes.map(txt => `⚠️ ${txt}`).join('<br>')}`, 'warning');
-            return;
-        }*/
 
         // Only save at the very last section
         if (!dataSaved && indiceActual === secciones.length - 1) {
@@ -904,11 +1183,13 @@ $(document).ready(function () {
             const totalImagenes = Object.keys(imagenesSubidas).length;
             console.log(`📷 Total de imágenes subidas: ${totalImagenes}`);
 
-            guardarSeccion(obtenerEstructuraFinal());
-            dataSaved = true;
-
-            mostrarNotificacion(`¡Formulario completado! Se enviaron ${totalImagenes} imágenes correctamente.`, 'success');
-            //window.location.replace("/retail/formulario");
+            // 🏁 FINALIZAR FORMULARIO COMPLETO
+           guardarSeccionActual().then(success => {
+                if (success) {
+                    dataSaved = true;
+                }
+            });
+            mostrarNotificacion(`¡Fin del formulario! Se enviaron ${totalImagenes} imágenes correctamente. Espere a que termine de enviarse los datos`, 'success');
             return;
         }
 
@@ -923,12 +1204,11 @@ $(document).ready(function () {
         // Validar campos de variación de KPI si estamos en sección 6
         if (indiceActual === secciones.indexOf("seccion-6")) {
             let variacionesValidas = true;
-
             for (let i = 1; i <= 6; i++) {
-                let input = $(`input[name='var_06_0${i}']`);
+                const prefijo = String(i).padStart(2, '0');
+                let input = $(`input[name='var_06_${prefijo}']`);
                 let valor = input.val();
 
-                // Validar que haya algo y sea número válido
                 if (valor === "" || isNaN(parseFloat(valor))) {
                     input.addClass('input-error');
                     variacionesValidas = false;
@@ -943,7 +1223,27 @@ $(document).ready(function () {
             }
         }
 
-        mostrarSeccion(++indiceActual);
+        const nombreSeccionActual = secciones[indiceActual];
+
+        // 🆕 GUARDAR DATOS SEGÚN SECCIÓN ACTUAL
+        if (nombreSeccionActual === "datos") {
+            // 📤 PASO 1: Guardar "datos" y obtener session_id
+            guardarDatos().then(success => {
+                if (success) {
+                    mostrarSeccion(++indiceActual);
+                }
+            });
+        } else if (nombreSeccionActual.startsWith("seccion-")) {
+            // 📤 PASO 2-7: Guardar sección individual
+            guardarSeccionActual().then(success => {
+                if (success) {
+                    mostrarSeccion(++indiceActual);
+                }
+            });
+        } else {
+            // Intros no necesitan guardar, solo avanzar
+            mostrarSeccion(++indiceActual);
+        }
     });
     $(".btnEmpezar1").click(function () {
         indiceActual = secciones.indexOf("datos");
@@ -972,19 +1272,21 @@ $(document).ready(function () {
     /**
      * Mostrar notificaciones tipo toast
      */
-    function mostrarNotificacion(mensaje, tipo = 'info') {
+    function mostrarNotificacion(mensaje, tipo = 'info', permanente = false) {
         const colores = {
             'success': '#059669',
             'error': '#dc2626',
             'warning': '#d97706',
-            'info': '#2563eb'
+            'info': '#2563eb',
+            'loading': '#6366f1'
         };
 
         const iconos = {
             'success': '✅',
             'error': '❌',
             'warning': '⚠️',
-            'info': 'ℹ️'
+            'info': 'ℹ️',
+            'loading': '⏳'
         };
 
         const $notification = $(`
@@ -1004,10 +1306,11 @@ $(document).ready(function () {
                 animation: slideIn 0.3s ease;
                 display: flex;
                 align-items: center;
+                gap: 8px;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             ">
-                <span style="margin-right: 8px; font-size: 16px;">${iconos[tipo]}</span>
-                <span>${mensaje}</span>
+                <span style="font-size: 16px; flex-shrink: 0;" class="notif-icon">${iconos[tipo]}</span>
+                <span class="notif-message">${mensaje}</span>
             </div>
             <style>
                 @keyframes slideIn {
@@ -1030,38 +1333,89 @@ $(document).ready(function () {
                         opacity: 0; 
                     }
                 }
+                @keyframes spin {
+                    from {
+                        transform: rotate(0deg);
+                    }
+                    to {
+                        transform: rotate(360deg);
+                    }
+                }
+                .loading-icon {
+                    animation: spin 1s linear infinite !important;
+                }
             </style>
         `);
 
         // Agregar al body
         $('body').append($notification);
+        $notification.data('permanente', permanente);
 
-        // Auto-remover después de 4 segundos
-        setTimeout(() => {
-            $notification.css({
-                'animation': 'slideOut 0.3s ease',
-                'animation-fill-mode': 'forwards'
-            });
+        // Agregar clase de animación si es loading
+        if (tipo === 'loading') {
+            $notification.find('.notif-icon').addClass('loading-icon');
+        }
 
+        // Auto-remover después de 4 segundos (solo si no es permanente)
+        if (!permanente) {
             setTimeout(() => {
-                if ($notification.length) {
-                    $notification.remove();
-                }
-            }, 300);
-        }, 4000);
+                cerrarNotificacion($notification);
+            }, 4000);
+        }
 
         // Permitir cerrar con clic
         $notification.click(function () {
-            $(this).css({
-                'animation': 'slideOut 0.3s ease',
-                'animation-fill-mode': 'forwards'
-            });
-            setTimeout(() => {
-                $(this).remove();
-            }, 300);
+            cerrarNotificacion($(this));
         });
 
         return $notification;
+    }
+
+    // 🆕 Función auxiliar para cerrar notificaciones
+    function cerrarNotificacion($notification) {
+        $notification.css({
+            'animation': 'slideOut 0.3s ease',
+            'animation-fill-mode': 'forwards'
+        });
+        setTimeout(() => {
+            if ($notification.length) {
+                $notification.remove();
+            }
+        }, 300);
+    }
+
+    // 🆕 Función para actualizar mensaje de notificación permanente
+    function actualizarNotificacionPermanente($notification, nuevoMensaje, nuevoTipo = null) {
+        $notification.find('.notif-message').text(nuevoMensaje);
+        
+        if (nuevoTipo) {
+            const colores = {
+                'success': '#059669',
+                'error': '#dc2626',
+                'warning': '#d97706',
+                'info': '#2563eb',
+                'loading': '#6366f1'
+            };
+            const iconos = {
+                'success': '✅',
+                'error': '❌',
+                'warning': '⚠️',
+                'info': 'ℹ️',
+                'loading': '⏳'
+            };
+            
+            $notification.css('background', colores[nuevoTipo]);
+            const $icon = $notification.find('.notif-icon');
+            $icon.text(iconos[nuevoTipo]);
+            
+            // Remover clase de animación si es loading anterior
+            $icon.removeClass('loading-icon');
+            
+            // Agregar clase de animación si es nuevo loading
+            if (nuevoTipo === 'loading') {
+                $icon.addClass('loading-icon');
+            }
+        }
     }
 
     // 🎯 VALIDAR DISTANCIA CUANDO CAMBIA LA TIENDA

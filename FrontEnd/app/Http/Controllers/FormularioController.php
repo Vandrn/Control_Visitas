@@ -3,219 +3,435 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Google\Cloud\BigQuery\BigQueryClient;
-use Google\Cloud\Storage\StorageClient;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Helpers\EvaluacionHelper;
-use Illuminate\Support\Facades\File;
+use App\Services\BigQueryService;
+use App\Services\ImageUploadService;
+use App\Services\TechnicalErrorLogger;
+use App\Services\DataFetchService;
+use App\Services\FormProcessingService;
 
+/**
+ * 📋 MONITOREO DE ERRORES TÉCNICOS:
+ * 
+ * Los errores técnicos se registran automáticamente en:
+ *   📁 storage/logs/errores-tecnicos.log
+ * 
+ * Para ver los errores en tiempo real desde terminal:
+ *   tail -f storage/logs/errores-tecnicos.log
+ * 
+ * O desde PowerShell:
+ *   Get-Content storage/logs/errores-tecnicos.log -Wait
+ * 
+ * Los errores contienen:
+ *   - Método donde ocurrió (saveDatos, saveSeccionIndividual, etc)
+ *   - session_id del formulario afectado
+ *   - Mensaje de error técnico completo
+ *   - IP del usuario
+ *   - URL de la solicitud
+ */
 class FormularioController extends Controller
 {
-    protected $bigQuery;
-    protected $storage;
-    protected $bucket;
+    protected $bigQueryService;
+    protected $imageUpload;
+    protected $errorLogger;
+    protected $dataFetch;
+    protected $formProcessing;
 
-    public function __construct()
+    public function __construct(
+        BigQueryService $bigQueryService,
+        ImageUploadService $imageUpload,
+        TechnicalErrorLogger $errorLogger,
+        DataFetchService $dataFetch,
+        FormProcessingService $formProcessing
+    ) {
+        $this->bigQueryService = $bigQueryService;
+        $this->imageUpload = $imageUpload;
+        $this->errorLogger = $errorLogger;
+        $this->dataFetch = $dataFetch;
+        $this->formProcessing = $formProcessing;
+        
+        Log::info('✅ Servicios inicializados', [
+            'BigQueryService' => 'OK',
+            'ImageUploadService' => 'OK',
+            'TechnicalErrorLogger' => 'OK',
+            'DataFetchService' => 'OK',
+            'FormProcessingService' => 'OK'
+        ]);
+    }
+
+    /**
+     * 🆕 PASO 1: Guardar "DATOS" (correo, modalidad, etc)
+     * Se ejecuta cuando hace click en "Continuar" en vista "datos"
+     * INSERT inicial que genera session_id
+     */
+    public function saveDatos(Request $request)
     {
-        // Initialize BigQuery client
-        $this->bigQuery = new BigQueryClient([
-            'projectId' => config('services.google.project_id'),
-            'keyFilePath' => storage_path('app/' . config('services.google.keyfile')),
-        ]);
+        try {
+            $datos = [
+                'fecha_hora_inicio' => $request->input('fecha_hora_inicio'),
+                'correo_realizo' => $request->input('correo_realizo'),
+                'lider_zona' => $request->input('lider_zona'),
+                'tienda' => $request->input('tienda'),
+                'ubicacion' => $request->input('ubicacion'),
+                'pais' => $request->input('pais'),
+                'zona' => $request->input('zona'),
+                'modalidad_visita' => $request->input('modalidad_visita')
+            ];
 
-        // Initialize Google Cloud Storage client
-        $this->storage = new StorageClient([
-            'projectId' => config('services.google.project_id'),
-            'keyFilePath' => storage_path('app/' . config('services.google.keyfile')),
-        ]);
+            $resultado = $this->bigQueryService->crearFormulario($datos);
 
-        // Get the bucket
-        $this->bucket = $this->storage->bucket(config('services.google.storage_bucket'));
+            if ($resultado['success']) {
+                session(['form_session_id' => $resultado['session_id']]);
+                return response()->json($resultado);
+            } else {
+                $this->errorLogger->registrarSiEsErrorTecnico('saveDatos', 'N/A', $resultado['message']);
+                return response()->json($resultado, 400);
+            }
+        } catch (\Exception $e) {
+            $this->errorLogger->registrar('saveDatos', 'N/A', $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
+            Log::error('❌ Error en saveDatos', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 🆕 PASO 2-7: Guardar secciones individuales
+     * Recibe: session_id, nombre_seccion, preguntas
+     */
+    public function saveSeccionIndividual(Request $request)
+    {
+        try {
+            $sessionId = $request->input('session_id');
+            $nombreSeccion = $request->input('nombre_seccion');
+            $preguntas = $request->input('preguntas', []);
+            $mainFields = $request->input('main_fields', []);
+
+            if (!$sessionId || !$nombreSeccion) {
+                return response()->json(['success' => false, 'message' => 'Faltan session_id o nombre_seccion'], 400);
+            }
+
+            Log::info('📤 Guardando sección individual', [
+                'session_id' => $sessionId,
+                'seccion' => $nombreSeccion,
+                'preguntas_count' => count($preguntas),
+                'main_fields_count' => count($mainFields)
+            ]);
+
+            $resultado = $this->bigQueryService->actualizarSeccion($sessionId, $nombreSeccion, $preguntas);
+            $this->errorLogger->registrarSiEsErrorTecnico('saveSeccionIndividual', $sessionId, $resultado['message'] ?? '', [
+                'seccion' => $nombreSeccion
+            ]);
+
+            if (!empty($mainFields) && $resultado['success']) {
+                Log::info('🆕 Actualizando campos principales desde seccion-1', ['session_id' => $sessionId]);
+                $this->bigQueryService->actualizarCamposPrincipales($sessionId, $mainFields);
+            }
+
+            return response()->json($resultado);
+        } catch (\Exception $e) {
+            $this->errorLogger->registrar('saveSeccionIndividual', $request->input('session_id', 'N/A'), $e->getMessage());
+            Log::error('❌ Error en saveSeccionIndividual', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 🆕 GUARDAR CAMPOS PRINCIPALES (pais, zona, tienda) desde seccion-1
+     */
+    public function saveMainFields(Request $request)
+    {
+        try {
+            $sessionId = $request->input('session_id');
+            $mainFields = $request->input('main_fields', []);
+
+            if (!$sessionId) {
+                return response()->json(['success' => false, 'message' => 'Falta session_id'], 400);
+            }
+
+            Log::info('🆕 Guardando campos principales', [
+                'session_id' => $sessionId,
+                'campos' => array_keys($mainFields)
+            ]);
+
+            $resultado = $this->bigQueryService->actualizarCamposPrincipales($sessionId, $mainFields);
+            $this->errorLogger->registrarSiEsErrorTecnico('saveMainFields', $sessionId, $resultado['message'] ?? '');
+            
+            return response()->json($resultado);
+        } catch (\Exception $e) {
+            $this->errorLogger->registrar('saveMainFields', $request->input('session_id', 'N/A'), $e->getMessage());
+            Log::error('❌ Error en saveMainFields', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 🆕 GUARDAR KPIs desde seccion-6
+     */
+    public function saveKPIs(Request $request)
+    {
+        try {
+            $sessionId = $request->input('session_id');
+            $kpis = $request->input('kpis', []);
+
+            if (!$sessionId) {
+                return response()->json(['success' => false, 'message' => 'Falta session_id'], 400);
+            }
+
+            $kpisValidos = array_filter($kpis, fn($k) => !empty($k['codigo_pregunta']) && !empty($k['valor']));
+
+            if (empty($kpisValidos)) {
+                return response()->json(['success' => false, 'message' => 'No hay KPIs válidos para guardar'], 400);
+            }
+
+            Log::info('📊 Guardando KPIs', ['session_id' => $sessionId, 'kpis_count' => count($kpisValidos)]);
+
+            $resultado = $this->bigQueryService->actualizarKPIs($sessionId, $kpisValidos);
+            $this->errorLogger->registrarSiEsErrorTecnico('saveKPIs', $sessionId, $resultado['message'] ?? '');
+            
+            return response()->json($resultado);
+        } catch (\Exception $e) {
+            $this->errorLogger->registrar('saveKPIs', $request->input('session_id', 'N/A'), $e->getMessage());
+            Log::error('❌ Error en saveKPIs', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 🆕 GUARDAR PLANES (Y FINALIZAR TODO)
+     * Recibe: session_id, planes
+     * OBTIENE de BigQuery: secciones, kpis para calcular promedios reales
+     * Calcula puntajes basados en DATOS REALES de BigQuery
+     */
+    public function savePlanes(Request $request)
+    {
+        try {
+            $sessionId = $request->input('session_id');
+            $planesEnviados = $request->input('planes', []);
+
+            if (!$sessionId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Falta session_id'
+                ], 400);
+            }
+
+            Log::info('📋 GUARDAR PLANES - Obteniendo datos reales de BigQuery', [
+                'session_id' => $sessionId,
+                'planes_recibidos' => count($planesEnviados)
+            ]);
+
+            // 🆕 CONSULTAR BigQuery para obtener datos REALES (no los del frontend)
+            $registroBQ = $this->bigQueryService->obtenerRegistro($sessionId);
+
+            if (!$registroBQ) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Registro no encontrado en BigQuery'
+                ], 400);
+            }
+
+            // 🆕 PROCESAR SECCIONES desde BigQuery
+            $secciones = [];
+            if (!empty($registroBQ['secciones'])) {
+                $seccionesData = is_string($registroBQ['secciones']) 
+                    ? json_decode($registroBQ['secciones'], true) 
+                    : (array)$registroBQ['secciones'];
+                $secciones = is_array($seccionesData) ? $seccionesData : [];
+            }
+
+            // 🆕 PROCESAR KPIs desde BigQuery
+            $kpis = [];
+            if (!empty($registroBQ['kpis'])) {
+                $kpisData = is_string($registroBQ['kpis']) 
+                    ? json_decode($registroBQ['kpis'], true) 
+                    : (array)$registroBQ['kpis'];
+                
+                if (is_array($kpisData)) {
+                    foreach ($kpisData as $kpi) {
+                        if (is_object($kpi)) {
+                            $kpis[] = [
+                                'codigo_pregunta' => $kpi->codigo_pregunta ?? $kpi['codigo_pregunta'] ?? '',
+                                'valor' => $kpi->valor ?? $kpi['valor'] ?? '',
+                                'variacion' => $kpi->variacion ?? $kpi['variacion'] ?? null
+                            ];
+                        } elseif (is_array($kpi)) {
+                            $kpis[] = $kpi;
+                        }
+                    }
+                }
+            }
+
+            Log::info('📊 Datos obtenidos de BigQuery', [
+                'session_id' => $sessionId,
+                'secciones_count' => count($secciones),
+                'kpis_count' => count($kpis),
+                'planes_recibidos' => count($planesEnviados)
+            ]);
+
+            $resumen = $this->formProcessing->calcularResumen($secciones, $kpis);
+            $resumenAreas = $resumen['resumen_areas'];
+            $totales = ['puntaje' => $resumen['puntos_totales'], 'estrellas' => $resumen['estrellas']];
+
+            // 🆕 PREPARAR DATOS PARA ACTUALIZAR BIGQUERY
+            $datosFinales = [
+                'planes' => $planesEnviados,
+                'fecha_hora_fin' => now()->toIso8601String(),
+                'secciones' => $secciones,
+                'kpis' => $kpis,
+                'resumen_areas' => $resumenAreas,
+                'puntos_totales' => $totales['puntaje'],
+                'estrellas' => $totales['estrellas'],
+            ];
+
+            // 🆕 GUARDAR EN BIGQUERY USANDO EL SERVICIO
+            $resultado = $this->bigQueryService->actualizarPlanesYFinalizar($sessionId, $datosFinales);
+
+            if (!$resultado['success']) {
+                Log::error('❌ Error al guardar planes y finalizar', [
+                    'error' => $resultado['message'],
+                    'session_id' => $sessionId
+                ]);
+                $this->errorLogger->registrarSiEsErrorTecnico('savePlanes', $sessionId, $resultado['message'] ?? '');
+                
+                return response()->json($resultado, 400);
+            }
+
+            Log::info('✅ Planes guardados y formulario finalizado exitosamente', [
+                'session_id' => $sessionId,
+                'planes_guardados' => count($planesEnviados),
+                'puntos_calculados' => $totales['puntaje'],
+                'estrellas_calculadas' => $totales['estrellas'],
+                'html_ruta' => $resultado['html_ruta'] ?? 'N/A'
+            ]);
+
+            return response()->json($resultado);
+
+        } catch (\Exception $e) {
+            $this->errorLogger->registrar('savePlanes', $request->input('session_id', 'N/A'), $e->getMessage());
+
+            Log::error('❌ Error en savePlanes', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 🆕 PASO FINAL: Completar formulario
+     * Se ejecuta al final después de guardar Planes
+     * ⚠️ IMPORTANTE: Los KPIS ya se guardaron en saveKPIs() y PLANES en savePlanes()
+     * Aquí se calculan RESUMEN y se marca fecha_hora_fin, pero SIN duplicar KPIs/Planes
+     */
+    public function finalizarFormulario(Request $request)
+    {
+        try {
+            $sessionId = $request->input('session_id');
+            $kpis = $request->input('kpis', []); // Para calcular promedios, pero NO se envía a BQ
+            $secciones = $request->input('secciones', []);
+            $planes = $request->input('planes', []); // 🆕 RECIBIR LOS PLANES TAMBIÉN
+
+            if (!$sessionId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Falta session_id'
+                ], 400);
+            }
+
+            // Calcular promedios y totales usando secciones y kpis (SOLO para el resumen)
+            $promediosPorArea = EvaluacionHelper::calcularPromediosPorArea($secciones, $kpis);
+            $totales = EvaluacionHelper::calcularTotalPonderado($promediosPorArea);
+
+            $resumenAreas = [];
+            foreach ($promediosPorArea as $area => $info) {
+                $resumenAreas[] = [
+                    'nombre' => ucfirst($area),
+                    'puntos' => $info['promedio'] ?? 'N/A',
+                    'estrellas' => isset($info['promedio']) ? intval(round($info['promedio'] / 0.2)) : 'N/A',
+                ];
+            }
+
+            // 🆕 INCLUIR PLANES EN DATOS FINALES PARA GENERAR HTML
+            $datosFinales = [
+                'fecha_hora_fin' => now()->toIso8601String(),
+                'kpis' => [], // Vacío - ya guardados en saveKPIs()
+                'planes' => $planes, // 🆕 INCLUIR PLANES PARA GENERAR HTML
+                'resumen_areas' => $resumenAreas,
+                'puntos_totales' => $totales['puntaje'],
+                'estrellas' => $totales['estrellas']
+            ];
+
+            Log::info('✅ Finalizando formulario', [
+                'session_id' => $sessionId,
+                'fecha_fin' => $datosFinales['fecha_hora_fin'],
+                'puntos_totales' => $totales['puntaje'],
+                'estrellas' => $totales['estrellas'],
+                'planes_count' => count($planes)
+            ]);
+
+            // Si vienen planes en la request, guardarlos explícitamente antes de finalizar
+            if (!empty($planes)) {
+                Log::info('📥 Se reciben planes en finalizarFormulario, guardando en BigQuery', [
+                    'session_id' => $sessionId,
+                    'planes_count' => count($planes)
+                ]);
+
+                $resPlanes = $this->bigQueryService->actualizarPlanes($sessionId, $planes);
+                $this->errorLogger->registrarSiEsErrorTecnico('finalizarFormulario.actualizarPlanes', $sessionId, $resPlanes['message'] ?? '');
+
+                if (empty($resPlanes['success']) || $resPlanes['success'] === false) {
+                    Log::warning('⚠️ No se pudieron guardar los planes durante finalizarFormulario', [
+                        'session_id' => $sessionId,
+                        'respuesta_planes' => $resPlanes
+                    ]);
+                }
+            }
+
+            $resultado = $this->bigQueryService->finalizarFormulario($sessionId, $datosFinales);
+
+            return response()->json($resultado);
+        } catch (\Exception $e) {
+            Log::error('❌ Error en finalizarFormulario', [
+                'error' => $e->getMessage(),
+                'session_id' => $request->input('session_id', 'N/A')
+            ]);
+
+            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        }
     }
 
     public function mostrarFormulario()
     {
-        // Generar un nuevo identificador único para cada formulario
         $formId = uniqid('form_', true);
         session(['form_id' => $formId]);
-
-        // Fetch data from BigQuery
-        $query = sprintf(
-            'SELECT * FROM `adoc-bi-dev.OPB.%s` WHERE session_id = @session_id',
-            config('admin.bigquery.visitas_table')
-        );
-        $queryJobConfig = $this->bigQuery->query($query)->parameters(['session_id' => $formId]);
-        $resultados = $this->bigQuery->runQuery($queryJobConfig);
-
-        // Convertir los resultados a un array
-        $resultadoArray = [];
-        foreach ($resultados->rows() as $row) {
-            $resultadoArray[] = (array) $row;
-        }
-
-        // Pass the data to the view
-        return view('formulario', ['resultado' => $resultadoArray]);
+        return view('formulario', ['resultado' => []]);
     }
 
     public function ObtenerPaises()
     {
-        $query = "
-            SELECT DISTINCT T001W.LAND1 AS BV_PAIS
-            FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
-                ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
-            WHERE ADRC.COUNTRY IN ('SV', 'GT', 'HN', 'CR', 'NI', 'PA')
-            AND T001W.VLFKZ = 'A'
-            AND ADRC.PO_BOX <> 'CL'
-            AND ADRC.SORT1 NOT IN ('WHS','BT1')
-            AND TVKTT.SPRAS = 'S'
-            AND ADR6.SMTP_ADDR IS NOT NULL
-        ";
-
-        $queryJobConfig = $this->bigQuery->query($query);
-        $results = $this->bigQuery->runQuery($queryJobConfig);
-
-        $paises = [];
-        foreach ($results->rows() as $row) {
-            $paises[] = [
-                'label' => $row['BV_PAIS'],
-                'value' => $row['BV_PAIS']
-            ];
-        }
-
+        $paises = $this->dataFetch->obtenerPaises();
         return response()->json($paises);
     }
 
     public function obtenerZonas($bv_pais)
     {
-        $query = "
-            SELECT DISTINCT ADRC.NAME3 AS ZONA
-            FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
-                ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
-            LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
-            WHERE T001W.LAND1 = @bv_pais
-            AND T001W.VLFKZ = 'A'
-            AND ADRC.PO_BOX <> 'CL'
-            AND ADRC.SORT1 NOT IN ('WHS','BT1')
-            AND TVKTT.SPRAS = 'S'
-            AND ADR6.SMTP_ADDR IS NOT NULL
-        ";
-
-        $queryJobConfig = $this->bigQuery->query($query)->parameters([
-            'bv_pais' => $bv_pais
-        ]);
-        $results = $this->bigQuery->runQuery($queryJobConfig);
-
-        $zonas = [];
-        foreach ($results->rows() as $row) {
-            $zona = $row['ZONA'];
-            // Si es Panamá, normaliza cualquier variante de 'Zona I' a 'Zona I'
-            if ($bv_pais === 'PA' && preg_match('/^zona i$/i', $zona)) {
-                $zona = 'Zona I';
-            }
-            $zonas[] = $zona;
-        }
-        // Si es Panamá, mostrar solo 'Zona I' si existe alguna variante
-        if ($bv_pais === 'PA') {
-            $tieneZonaI = false;
-            foreach ($zonas as $z) {
-                if (preg_match('/^zona i$/i', $z)) {
-                    $tieneZonaI = true;
-                    break;
-                }
-            }
-            if ($tieneZonaI) {
-                $zonas = ['Zona I'];
-            }
-        }
+        $zonas = $this->dataFetch->obtenerZonas($bv_pais);
         return response()->json($zonas);
     }
 
     public function obtenerTiendas($bv_pais, $zona)
     {
-        // Si es Panamá y la zona es 'Zona I', buscar ambas variantes
-        if ($bv_pais === 'PA' && preg_match('/^zona i$/i', $zona)) {
-            $query = "
-                SELECT 
-                    ADRC.NAME1 AS TIENDA,
-                    ADRC.NAME2 AS UBICACION,
-                    CONCAT(GEO.LATITUD, ',', GEO.LONGITUD) AS GEO
-                FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
-                    ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
-                LEFT JOIN `adoc-bi-prd`.`BI_Repo_Qlik.DIM_GEOLOCALIZACION` AS GEO ON GEO.WERKS = CAST(T001W.WERKS AS INT64)
-                WHERE T001W.LAND1 = @bv_pais
-                AND (ADRC.NAME3 = 'Zona I' OR ADRC.NAME3 = 'ZONA I')
-                AND T001W.VLFKZ = 'A'
-                AND ADRC.PO_BOX <> 'CL'
-                AND ADRC.SORT1 NOT IN ('WHS','BT1')
-                AND TVKTT.SPRAS = 'S'
-                AND ADR6.SMTP_ADDR IS NOT NULL
-            ";
-            $queryJobConfig = $this->bigQuery->query($query)->parameters([
-                'bv_pais' => $bv_pais
-            ]);
-        } else {
-            $query = "
-                SELECT 
-                    ADRC.NAME1 AS TIENDA,
-                    ADRC.NAME2 AS UBICACION,
-                    CONCAT(GEO.LATITUD, ',', GEO.LONGITUD) AS GEO
-                FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS T001W
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNVV` AS KNVV
-                    ON KNVV.KUNNR = T001W.KUNNR AND T001W.VKORG = KNVV.VKORG AND T001W.VTWEG = KNVV.VTWEG
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS KNA1 ON KNA1.KUNNR = KNVV.KUNNR
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`WRF1` AS WRF1 ON WRF1.LOCNR = KNA1.KUNNR
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS ADRC ON ADRC.ADDRNUMBER = KNA1.ADRNR
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADR6` AS ADR6 ON ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
-                LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`TVKTT` AS TVKTT ON TVKTT.MANDT = T001W.MANDT AND KNVV.KTGRD = TVKTT.KTGRD
-                LEFT JOIN `adoc-bi-prd`.`BI_Repo_Qlik.DIM_GEOLOCALIZACION` AS GEO ON GEO.WERKS = CAST(T001W.WERKS AS INT64)
-                WHERE T001W.LAND1 = @bv_pais
-                AND ADRC.NAME3 = @zona
-                AND T001W.VLFKZ = 'A'
-                AND ADRC.PO_BOX <> 'CL'
-                AND ADRC.SORT1 NOT IN ('WHS','BT1')
-                AND TVKTT.SPRAS = 'S'
-                AND ADR6.SMTP_ADDR IS NOT NULL
-            ";
-            $queryJobConfig = $this->bigQuery->query($query)->parameters([
-                'bv_pais' => $bv_pais,
-                'zona' => $zona
-            ]);
-        }
-        $results = $this->bigQuery->runQuery($queryJobConfig);
-
-        $tiendas = [];
-        foreach ($results->rows() as $row) {
-            $tiendas[] = [
-                'TIENDA' => $row['TIENDA'],       // Solo NAME1, sin concatenación
-                'UBICACION' => $row['UBICACION'], // Guardado si lo necesitas internamente
-                'GEO' => $row['GEO'] ?? null
-            ];
-        }
-
+        $tiendas = $this->dataFetch->obtenerTiendas($bv_pais, $zona);
         return response()->json($tiendas);
     }
 
-    /**
-     * 🆕 MÉTODO MEJORADO: Subir imagen individual con validación estricta de 6MB
-     */
     public function subirImagenIncremental(Request $request)
     {
         try {
@@ -226,91 +442,59 @@ class FormularioController extends Controller
             }
 
             $file = $request->file('image');
-
-            // 🔒 VALIDACIÓN ESTRICTA DE TAMAÑO (6MB máximo)
-            $maxSizeBytes = 6 * 1024 * 1024; // 6MB
-            if ($file->getSize() > $maxSizeBytes) {
-                $sizeMB = round($file->getSize() / (1024 * 1024), 2);
-                return response()->json([
-                    'error' => "Imagen demasiado grande: {$sizeMB}MB. Máximo permitido: 6MB"
-                ], 413);
+            $validacionTamano = $this->imageUpload->validarTamano($file);
+            if (!$validacionTamano['valid']) {
+                return response()->json(['error' => $validacionTamano['error']], 413);
             }
 
-            // Verificar tipo de archivo
-            $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-            if (!in_array($file->getMimeType(), $allowedTypes)) {
-                return response()->json([
-                    'error' => 'Tipo de archivo no permitido. Solo: JPEG, PNG, WebP'
-                ], 415);
+            $validacionTipo = $this->imageUpload->validarTipo($file);
+            if (!$validacionTipo['valid']) {
+                return response()->json(['error' => $validacionTipo['error']], 415);
             }
 
             if (!session()->has('token_unico')) {
                 session(['token_unico' => Str::uuid()->toString()]);
             }
 
-            Log::info("📤 Subiendo imagen individual", [
-                'field_name' => $fieldName,
-                'original_size' => round($file->getSize() / (1024 * 1024), 2) . 'MB',
-                'mime_type' => $file->getMimeType()
-            ]);
+            Log::info("📤 Subiendo imagen individual", ['field_name' => $fieldName]);
 
-            // 🚀 SUBIR CON COMPRESIÓN ADICIONAL EN SERVIDOR
-            $publicUrl = $this->uploadImageToCloudStorageOptimized($file, $fieldName);
+            $publicUrl = $this->imageUpload->subirImagenOptimizada($file, $fieldName);
 
             if ($publicUrl) {
-                // Guardar URL en sesión para uso posterior
                 session(["uploaded_images.{$fieldName}" => $publicUrl]);
-
-                Log::info("✅ Imagen subida exitosamente", [
-                    'field_name' => $fieldName,
-                    'url' => $publicUrl
-                ]);
-
                 return response()->json([
                     'success' => true,
                     'url' => $publicUrl,
                     'field_name' => $fieldName,
-                    'message' => 'Imagen subida correctamente',
-                    'size_info' => 'Comprimida y optimizada'
+                    'message' => 'Imagen subida correctamente'
                 ]);
             } else {
                 return response()->json(['error' => 'Error al subir la imagen al storage'], 500);
             }
         } catch (\Exception $e) {
-            Log::error('❌ Error en subida incremental', [
-                'error' => $e->getMessage(),
-                'field_name' => $request->input('field_name'),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'error' => 'Error interno: ' . $e->getMessage()
-            ], 500);
+            Log::error('❌ Error en subida incremental', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Error interno: ' . $e->getMessage()], 500);
         }
     }
 
     public function guardarSeccion(Request $request)
     {
         try {
-            set_time_limit(180); // 3 minutos de tiempo máximo
+            set_time_limit(180);
             if (!session()->has('token_unico')) {
                 session(['token_unico' => Str::uuid()->toString()]);
             }
+            
             $formId = session('token_unico');
             $tiendaCompleta = $request->input('tienda');
-
-            // === DATOS BASE (orden según esquema) ===
             $correoOriginal = $request->input('correo_realizo');
-            $correoParaGuardar = $correoOriginal;
-            if ($correoOriginal === 'erick.cruz@empresasadoc.com') {
-                $correoParaGuardar = 'belen.perez@empresasadoc.com';
-            }
+
             $data = [
                 'id' => uniqid(),
                 'session_id' => $formId,
                 'fecha_hora_inicio' => $request->input('fecha_hora_inicio'),
                 'fecha_hora_fin' => now(),
-                'correo_realizo' => $correoParaGuardar,
+                'correo_realizo' => $correoOriginal,
                 'lider_zona' => $request->input('lider_zona'),
                 'tienda' => $tiendaCompleta,
                 'ubicacion' => $request->input('ubicacion'),
@@ -318,252 +502,59 @@ class FormularioController extends Controller
                 'zona' => $request->input('zona'),
                 'modalidad' => $request->input('modalidad_visita'),
             ];
-            
-            $crmIdTienda = trim(Str::before($tiendaCompleta, ' '));
-            $crmIdTiendaCompleto = $data['pais'] . $crmIdTienda;
-            // Convertir código SV a nombre completo
-            $nombrePais = match ($data['pais']) {
-                'SV' => 'EL SALVADOR',
-                'GT' => 'GUATEMALA',
-                'HN' => 'HONDURAS',
-                'NI' => 'NICARAGUA',
-                'CR' => 'COSTA RICA',
-                'PA' => 'PANAMÁ',
-                default => $data['pais'], // fallback por si acaso
-            };
 
-            // === SECCIONES ===
             $data['secciones'] = $request->input('secciones', []);
-            
-            // Validar que las preguntas con imagen obligatoria tengan al menos una imagen
-            $preguntasConImagen = [
-                2 => [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22], // Operaciones
-                4 => [1, 2, 5, 6, 7, 8, 9], // Producto
-                5 => [1, 9] // Personal
-            ];
-            // Mapear nombre de sección a número para validación
-            $mapaSeccionNombreNumero = [
-                'operaciones' => 2,
-                'producto' => 4,
-                'personal' => 5
-            ];
-            // Validar por código de pregunta, no por índice
-            $mapaCodigos = [
-                2 => array_map(function($n) { return sprintf('PREG_01_%02d', $n); }, $preguntasConImagen[2]), // Operaciones
-                4 => array_map(function($n) { return sprintf('PREG_03_%02d', $n); }, $preguntasConImagen[4]), // Producto
-                5 => array_map(function($n) { return sprintf('PREG_04_%02d', $n); }, $preguntasConImagen[5]), // Personal
-            ];
-            foreach ($data['secciones'] as $seccion) {
-                $nombre = $seccion['nombre_seccion'] ?? '';
-                $numSeccion = $mapaSeccionNombreNumero[$nombre] ?? null;
-                if (!$numSeccion || !isset($preguntasConImagen[$numSeccion])) continue;
-                $codigosValidar = $mapaCodigos[$numSeccion] ?? [];
-                foreach ($seccion['preguntas'] as $pregunta) {
-                    $codigo = $pregunta['codigo_pregunta'] ?? '';
-                    if (in_array($codigo, $codigosValidar)) {
-                        if (empty($pregunta['imagenes']) || count($pregunta['imagenes']) < 1) {
-                            return response()->json([
-                                'error' => 'Debes subir al menos una imagen en la pregunta ' . $codigo . ' de la sección ' . $numSeccion
-                            ], 422);
-                        }
-                    }
-                }
-            }
-
-            // === PLANES DE ACCIÓN ===
             $data['planes'] = $request->input('planes', []);
-
-            // === KPIs (si vienen como array ya formateado) ===
             $data['kpis'] = $request->input('kpis', []);
 
-            // === VERIFICACIÓN DE URL DE IMÁGENES (opcional) ===
-            foreach ($data['secciones'] as &$seccion) {
-                foreach ($seccion['preguntas'] as &$pregunta) {
-                    // Asegurarse que sea arreglo, aunque venga vacío
-                    if (!isset($pregunta['imagenes']) || !is_array($pregunta['imagenes'])) {
-                        $pregunta['imagenes'] = [];
-                    }
-
-                    // Filtrar y asegurar máximo 5 URLs válidas
-                    $pregunta['imagenes'] = collect($pregunta['imagenes'])
-                        ->filter(fn($url) => is_string($url) && str_starts_with($url, 'http'))
-                        ->take(5)
-                        ->values()
-                        ->all();
-                }
+            // Validar imágenes obligatorias
+            $validacion = $this->formProcessing->validarImagenesObligatorias($data['secciones']);
+            if (!$validacion['valido']) {
+                return response()->json(['error' => $validacion['error']], 422);
             }
 
+            $this->formProcessing->normalizarURLsImagenes($data['secciones']);
+
             // === LOG ===
-            Log::info("✅ Estructura final lista para insertar:", $data);
+            Log::info("✅ Estructura final lista para insertar", ['session_id' => $formId, 'secciones' => count($data['secciones'])]);
 
-            // === INSERTAR EN BIGQUERY ===
-            $table = $this->bigQuery
-                ->dataset(config('admin.bigquery.dataset'))
-                ->table(config('admin.bigquery.visitas_table'));
-
+            // === INSERTAR EN BIGQUERY USANDO BIGQUERYSERVICE ===
+            $table = $this->bigQueryService->obtenerTabla();
             $insertResponse = $table->insertRows([['data' => $data]]);
 
             if ($insertResponse->isSuccessful()) {
                 session()->forget('uploaded_images');
 
                 try {
-                    $correoUsuario = $data['correo_realizo'];
+                    $crmIdTienda = trim(Str::before($tiendaCompleta, ' '));
+                    $crmIdTiendaCompleto = $data['pais'] . $crmIdTienda;
 
-                    // === CONSULTAR correo tienda desde BigQuery ===
-                    $queryTienda = $this->bigQuery->query(<<<'SQL'
-                    WITH emails AS (
-                      SELECT ADDRNUMBER, ANY_VALUE(SMTP_ADDR) AS SMTP_ADDR
-                      FROM `adoc-bi-prd`.`SAP_ECC`.`ADR6`
-                      WHERE SMTP_ADDR IS NOT NULL AND SMTP_ADDR != ''
-                      GROUP BY ADDRNUMBER
-                    )
-SELECT
-  w.LAND1 AS Pais,
-  CONCAT(w.LAND1, COALESCE(a.SORT1,'')) AS Pais_Tienda,
-  e.SMTP_ADDR AS Email
-FROM `adoc-bi-prd`.`SAP_ECC`.`T001W` AS w
-JOIN `adoc-bi-prd`.`SAP_ECC`.`KNA1` AS c ON c.KUNNR = w.KUNNR
-LEFT JOIN `adoc-bi-prd`.`SAP_ECC`.`ADRC` AS a ON a.ADDRNUMBER = c.ADRNR
-LEFT JOIN emails AS e ON e.ADDRNUMBER = a.ADDRNUMBER
-WHERE
-  w.LAND1 IN ('SV','GT','HN','CR','NI','PA')
-  AND w.VLFKZ = 'A'
-  AND UPPER(a.SORT1) NOT IN ('WHS','BT1')
-  AND CONCAT(w.LAND1, COALESCE(a.SORT1,'')) = @tienda
-  AND w.LAND1 = @pais
-LIMIT 1
-SQL
-                    )->parameters([
-                      'tienda' => $crmIdTiendaCompleto, // ej: "SV1234"
-                      'pais'   => $data['pais']         // ej: "SV"
+                    // Obtener correos usando DataFetchService
+                    $correoTienda = $this->dataFetch->obtenerCorreoTienda($crmIdTiendaCompleto, $data['pais']);
+                    $correoJefe = $this->dataFetch->obtenerCorreoJefe($data['pais']);
+
+                    // Calcular resumen de puntuaciones usando FormProcessingService
+                    $resumen = $this->formProcessing->calcularResumen($data['secciones'], $data['kpis']);
+                    $data['resumen_areas'] = $resumen['resumen_areas'];
+                    $data['puntos_totales'] = $resumen['puntos_totales'];
+                    $data['estrellas'] = $resumen['estrellas'];
+                    $data['correo_tienda'] = $correoTienda;
+                    $data['correo_jefe_zona'] = $correoJefe;
+
+                    // Generar HTML para correo
+                    $urlHtml = $this->formProcessing->generarHTMLCorreo($data, $correoOriginal);
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Formulario guardado correctamente y HTML generado',
+                        'url_html' => $urlHtml
                     ]);
-
-
-                    Log::info('➡️ Consultando correo tienda...');
-                    Log::info("🔎 Buscando correo de tienda con:", [
-                        'pais_tienda' => $crmIdTiendaCompleto,
-                        'pais' => $data['pais']
-                    ]);
-
-                    $resultTienda = $this->bigQuery->runQuery($queryTienda);
-                    Log::info('✅ Consulta correo tienda completada');
-
-                    $correoTienda = null;
-                    foreach ($resultTienda->rows() as $row) {
-                        Log::info("📥 Resultado de correo tienda:", (array) $row);
-                        if (!empty($row['Email'])) {
-                            $correoTienda = $row['Email'];
-                            break;
-                        }
-                        if (!empty($row['email'])) {
-                            $correoTienda = $row['email'];
-                            break;
-                        }
-                    }
-
-                    // === CONSULTAR correo jefe desde BigQuery ===
-                    $queryJefe = $this->bigQuery->query(
-                        'SELECT CORREO_GERENTE FROM `adoc-bi-dev.DEV_OPB.dim_gerentes`
-                        WHERE BV_PAIS = @bv_pais'
-                    )->parameters([
-                        'bv_pais' => $data['pais']
-                    ]);
-
-                    Log::info('➡️ Consultando correo jefe...');
-                    Log::info("🔎 Buscando correo de jefe con:", [
-                        'BV_PAIS' => $data['pais'] // Usa el mismo prefijo que formaste para CRM_ID_TIENDA (SV, GT, etc.)
-                    ]);
-                    $resultJefe = $this->bigQuery->runQuery($queryJefe);
-                    Log::info('✅ Consulta correo jefe completada');
-
-                    $correoJefe = null;
-                    foreach ($resultJefe->rows() as $row) {
-                        Log::info("📥 Resultado de correo jefe:", (array) $row);
-                        $correoJefe = $row['CORREO_GERENTE'] ?? null;
-                    }
-
-                    // === CALCULAR PUNTUACIONES ===
-                    $promediosPorArea = EvaluacionHelper::calcularPromediosPorArea($data['secciones'], $data['kpis']);
-                    $totales = EvaluacionHelper::calcularTotalPonderado($promediosPorArea);
-
-                    $data['resumen_areas'] = [];
-                    foreach ($promediosPorArea as $area => $info) {
-                        $data['resumen_areas'][] = [
-                            'nombre' => ucfirst($area),
-                            'puntos' => $info['promedio'] ?? 'N/A',
-                            'estrellas' => isset($info['promedio']) ? intval(round($info['promedio'] / 0.2)) : 'N/A',
-                        ];
-                    }
-
-                    $data['puntos_totales'] = $totales['puntaje'];
-                    $data['estrellas'] = $totales['estrellas'];
-
-                   // === ENVIAR CORREO ===
-                    $destinatariosCC = array_filter([$correoTienda, $correoJefe]);
-                    
-                    if ($correoOriginal) {
-                        try {
-                            // Renderizar el contenido del correo como HTML
-                            Log::info('➡️ Generando HTML...');
-                            $html = view('emails.visita_confirmacion', ['datos' => $data])->render();
-                    
-                            // Insertar comentario con los correos justo después del <body>
-                            $comentarioCorreos = "<!--\n";
-                            $comentarioCorreos .= "correo_realizo: {$correoOriginal}\n";
-                            $comentarioCorreos .= "correo_tienda: ".($correoTienda ?? 'NO ENCONTRADO')."\n";
-                            $comentarioCorreos .= "correo_jefe_zona: {$correoJefe}\n";
-                            $comentarioCorreos .= "-->\n";
-                    
-                            $html = preg_replace_callback('/<body[^>]*>/', function ($matches) use ($comentarioCorreos) {
-                                return $matches[0] . "\n" . $comentarioCorreos;
-                            }, $html);
-
-                            Log::info('✅ HTML generado con comentario');
-                    
-                            // Crear nombre del archivo único
-                            $nombreArchivo = 'visita_' . Str::random(8) . '.html';
-                    
-                            // 📁 Carpeta completa en CPanel (public_html/retail/correos)
-                            $rutaCarpeta = $_SERVER['DOCUMENT_ROOT'] . '/retail/correos';
-                    
-                            if (!File::exists($rutaCarpeta)) {
-                                File::makeDirectory($rutaCarpeta, 0755, true);
-                            }
-                    
-                            // Ruta completa del archivo
-                            $rutaArchivo = $rutaCarpeta . '/' . $nombreArchivo;
-                    
-                            // Guardar el archivo HTML
-                            File::put($rutaArchivo, $html);
-                    
-                            // Generar URL pública para Power Automate
-                            $urlHtml = url('retail/correos/' . $nombreArchivo);
-                    
-                            Log::info('✅ HTML de visita generado y guardado para Power Automate', [
-                                'url' => $urlHtml
-                            ]);
-                        } catch (\Exception $e) {
-                            Log::error('❌ Error al generar archivo HTML', [
-                                'error' => $e->getMessage()
-                            ]);
-                        }
-                    }
-
                 } catch (\Exception $e) {
-                    Log::error('❌ Error al crear el correo de confirmación', [
-                        'error' => $e->getMessage()
-                    ]);
+                    Log::error('❌ Error al crear el correo de confirmación', ['error' => $e->getMessage()]);
+                    return response()->json(['success' => true, 'message' => 'Formulario guardado pero error en correo'], 200);
                 }
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Formulario guardado correctamente y HTML generado',
-                    'url_html' => $urlHtml ?? null
-                ]);
             } else {
-                Log::error('❌ Error al insertar en BigQuery', [
-                    'errores' => $insertResponse->failedRows()
-                ]);
+                Log::error('❌ Error al insertar en BigQuery', ['errores' => $insertResponse->failedRows()]);
                 return response()->json(['error' => 'Error al insertar en BigQuery.'], 500);
             }
         } catch (\Exception $e) {
@@ -571,194 +562,7 @@ SQL
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            return response()->json([
-                'error' => 'Error interno: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * 🆕 SUBIDA OPTIMIZADA SIN INTERVENTION IMAGE (solo PHP nativo)
-     */
-    private function uploadImageToCloudStorageOptimized($file, $nombreCampo, $prefix = 'observaciones/')
-    {
-        try {
-            if (!session()->has('token_unico')) {
-                session(['token_unico' => Str::uuid()->toString()]);
-            }
-            $tokenUnico = session('token_unico');
-
-            // 📏 Log tamaño original
-            $originalSize = $file->getSize() / (1024 * 1024);
-            Log::info("🔍 Procesando imagen con PHP nativo", [
-                'campo' => $nombreCampo,
-                'tamaño_original' => round($originalSize, 2) . 'MB'
-            ]);
-
-            // 🎨 COMPRESIÓN CON GD (PHP nativo)
-            $tempPath = $file->getRealPath();
-            $imageInfo = getimagesize($tempPath);
-
-            if (!$imageInfo) {
-                throw new \Exception("No se pudo leer la información de la imagen");
-            }
-
-            // Crear imagen desde archivo según tipo
-            switch ($imageInfo['mime']) {
-                case 'image/jpeg':
-                    $sourceImage = \imagecreatefromjpeg($tempPath);
-                    break;
-                case 'image/png':
-                    $sourceImage = \imagecreatefrompng($tempPath);
-                    break;
-                case 'image/gif':
-                    $sourceImage = \imagecreatefromgif($tempPath);
-                    break;
-                case 'image/webp':
-                    $sourceImage = \imagecreatefromwebp($tempPath);
-                    break;
-                default:
-                    throw new \Exception("Tipo de imagen no soportado: " . $imageInfo['mime']);
-            }
-
-            if (!$sourceImage) {
-                throw new \Exception("No se pudo crear la imagen desde el archivo");
-            }
-
-            // Obtener dimensiones originales
-            $originalWidth = imagesx($sourceImage);
-            $originalHeight = imagesy($sourceImage);
-
-            // Calcular nuevas dimensiones (máximo 800px)
-            $maxDimension = 800;
-            if ($originalWidth > $maxDimension || $originalHeight > $maxDimension) {
-                if ($originalWidth > $originalHeight) {
-                    $newWidth = $maxDimension;
-                    $newHeight = ($originalHeight * $maxDimension) / $originalWidth;
-                } else {
-                    $newHeight = $maxDimension;
-                    $newWidth = ($originalWidth * $maxDimension) / $originalHeight;
-                }
-            } else {
-                $newWidth = $originalWidth;
-                $newHeight = $originalHeight;
-            }
-
-            // Crear nueva imagen redimensionada
-            $resizedImage = imagecreatetruecolor($newWidth, $newHeight);
-
-            // Mantener transparencia para PNG
-            if ($imageInfo['mime'] === 'image/png') {
-                imagealphablending($resizedImage, false);
-                imagesavealpha($resizedImage, true);
-                $transparent = imagecolorallocatealpha($resizedImage, 255, 255, 255, 127);
-                imagefill($resizedImage, 0, 0, $transparent);
-            }
-
-            // Redimensionar imagen
-            imagecopyresampled(
-                $resizedImage,
-                $sourceImage,
-                0,
-                0,
-                0,
-                0,
-                $newWidth,
-                $newHeight,
-                $originalWidth,
-                $originalHeight
-            );
-
-            // 🗜️ COMPRIMIR ITERATIVAMENTE
-            $quality = 85;
-            $targetSizeBytes = 5 * 1024 * 1024; // 5MB target
-            $attempts = 0;
-            $maxAttempts = 8;
-
-            do {
-                // Capturar output de imagen comprimida
-                ob_start();
-                \imagejpeg($resizedImage, null, $quality);
-                $imageData = ob_get_contents();
-                ob_end_clean();
-
-                $currentSize = strlen($imageData);
-
-                Log::info("🔄 Intento compresión nativa", [
-                    'intento' => $attempts + 1,
-                    'calidad' => $quality,
-                    'tamaño_actual' => round($currentSize / (1024 * 1024), 2) . 'MB'
-                ]);
-
-                if ($currentSize <= $targetSizeBytes) {
-                    break; // ✅ Tamaño objetivo alcanzado
-                }
-
-                // Reducir calidad
-                $quality = max(10, $quality - 15);
-                $attempts++;
-            } while ($attempts < $maxAttempts);
-
-            // Limpiar memoria
-            imagedestroy($sourceImage);
-            imagedestroy($resizedImage);
-
-            $finalSizeMB = strlen($imageData) / (1024 * 1024);
-
-            Log::info("📦 Compresión nativa finalizada", [
-                'tamaño_final' => round($finalSizeMB, 2) . 'MB',
-                'calidad_final' => $quality,
-                'compresión' => round((1 - $finalSizeMB / $originalSize) * 100, 1) . '%'
-            ]);
-
-            // 🚨 VALIDACIÓN FINAL
-            if ($finalSizeMB > 5.5) {
-                throw new \Exception("Imagen aún muy grande: {$finalSizeMB}MB");
-            }
-
-            // 🔤 GENERAR NOMBRE ÚNICO
-            $filename = sprintf(
-                '%s%s_%s_%s_%s.jpg',
-                $prefix,
-                $nombreCampo,
-                $tokenUnico,
-                time(),
-                substr(md5($imageData), 0, 8)
-            );
-
-            // ☁️ SUBIR A CLOUD STORAGE
-            $this->bucket->upload($imageData, [
-                'name' => $filename,
-                'metadata' => [
-                    'contentType' => 'image/jpeg',
-                    'cacheControl' => 'public, max-age=3600',
-                    'customMetadata' => [
-                        'campo_formulario' => $nombreCampo,
-                        'session_id' => $tokenUnico,
-                        'tamaño_comprimido' => round($finalSizeMB, 2) . 'MB',
-                        'fecha_subida' => now()->toISOString()
-                    ]
-                ]
-            ]);
-
-            $publicUrl = sprintf(
-                'https://storage.cloud.google.com/%s/%s',
-                config('services.google.storage_bucket'),
-                $filename
-            );
-
-            Log::info("🎉 Imagen subida con PHP nativo", [
-                'url' => $publicUrl,
-                'tamaño_final' => round($finalSizeMB, 2) . 'MB'
-            ]);
-
-            return $publicUrl;
-        } catch (\Exception $e) {
-            Log::error('❌ Error en subida nativa', [
-                'error' => $e->getMessage(),
-                'campo' => $nombreCampo
-            ]);
-            return null;
+            return response()->json(['error' => 'Error interno: ' . $e->getMessage()], 500);
         }
     }
 }
