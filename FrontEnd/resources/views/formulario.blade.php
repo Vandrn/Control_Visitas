@@ -80,6 +80,7 @@
     @include('partials.intro')
     <div class="formulario">
         <form onsubmit="return false;" method="POST" enctype="multipart/form-data">
+            <input type="hidden" id="session_id" value="{{ $sessionId ?? '' }}">
             @csrf
             @include('partials.datos')
             @include ('partials.seccion-1')

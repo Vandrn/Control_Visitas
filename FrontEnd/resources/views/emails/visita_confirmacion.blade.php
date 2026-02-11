@@ -46,6 +46,12 @@
             $resumenAreas = [];
         }
     @endphp
+    <!--
+    correo_realizo: {{ $datos['correo_realizo'] ?? '' }}
+    correo_tienda: {{ $datos['correo_tienda'] ?? '' }}
+    correo_jefe_zona: {{ $datos['correo_jefe_zona'] ?? '' }}
+    -->
+
     <h1>📝 Resultado de la visita a {{ Str::before($datos['tienda'], ' -') }}</h1>
 
     <p>
