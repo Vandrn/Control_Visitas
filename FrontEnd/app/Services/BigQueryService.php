@@ -27,6 +27,66 @@ class BigQueryService
         $this->table = config('admin.bigquery.visitas_table');
     }
 
+
+    /**
+     * OBTENER PROGRESO - Endpoint para obtener pantalla actual y progreso guardado
+    */
+    public function getProgreso($sessionId)
+    {
+        $query = sprintf(
+            "SELECT pantalla_actual FROM `%s.%s.%s`
+            WHERE session_id = @session_id
+            LIMIT 1",
+            config('services.google.project_id'),
+            $this->dataset,
+            $this->table
+        );
+
+        $job = $this->bigQuery->query($query)
+            ->parameters(['session_id' => $sessionId])
+            ->useLegacySql(false)
+            ->location('US');
+
+        $results = $this->bigQuery->runQuery($job);
+
+        foreach ($results as $row) {
+            return ['pantalla_actual' => $row['pantalla_actual'] ?? null];
+        }
+
+        return [];
+    }
+
+
+    /**
+     * GUARDAR PROGRESO - Endpoint para actualizar pantalla actual
+     */
+    public function updateProgreso($sessionId, $pantalla)
+    {
+        $query = sprintf(
+            "MERGE `%s.%s.%s` T
+            USING (SELECT @session_id AS session_id, @pantalla AS pantalla_actual) S
+            ON T.session_id = S.session_id
+            WHEN MATCHED THEN
+            UPDATE SET pantalla_actual = S.pantalla_actual, updated_at = CURRENT_TIMESTAMP()
+            WHEN NOT MATCHED THEN
+            INSERT (session_id, pantalla_actual, updated_at)
+            VALUES (S.session_id, S.pantalla_actual, CURRENT_TIMESTAMP())",
+            config('services.google.project_id'),
+            $this->dataset,
+            $this->table
+        );
+
+        $job = $this->bigQuery->query($query)
+            ->parameters([
+                'session_id' => $sessionId,
+                'pantalla' => $pantalla,
+            ])
+            ->useLegacySql(false)
+            ->location('US');
+
+        $this->bigQuery->runQuery($job);
+    }
+
     /**
      * 🛡️ Helper para escapear strings en SQL y manejo de NULL
      */
@@ -780,11 +840,14 @@ class BigQueryService
                 'secciones' => [],
                 'kpis' => [],
                 'planes' => [],
-
-                // ✅ opción A: se usan los campos persistidos
                 'resumen_areas' => [],
                 'puntos_totales' => 0,
                 'estrellas' => 0,
+
+                //correos para el HTML
+                'correo_realizo' => $registro['correo_realizo'] ?? 'N/A',
+                'correo_tienda' => $registro['correo_tienda'] ?? ($datosFinales['correo_tienda'] ?? ''),
+                'correo_jefe_zona' => $registro['correo_jefe_zona'] ?? ($datosFinales['correo_jefe_zona'] ?? '')
             ];
 
             // 3) Secciones

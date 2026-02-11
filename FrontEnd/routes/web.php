@@ -8,9 +8,12 @@ use Illuminate\Support\Facades\Route;
     return view('welcome');
 });*/
 
-Route::post('retail/guardar-seccion', [FormularioController::class, 'guardarSeccion'])->name('guardar.seccion');
 Route::get('/formulario', [FormularioController::class, 'mostrarFormulario'])->name('formulario');
 Route::post('/formulario', [FormularioController::class, 'mostrarFormulario'])->name('formulario');
+
+//guardar progreso
+Route::get('/form/progreso/{sessionId}', [FormularioController::class, 'obtenerProgreso']);
+Route::post('/form/progreso/{sessionId}', [FormularioController::class, 'guardarProgreso']);
 
 // 🆕 NUEVOS ENDPOINTS POR SECCIÓN
 Route::post('retail/save-datos', [FormularioController::class, 'saveDatos'])->name('save.datos');

@@ -61,6 +61,25 @@ class FormularioController extends Controller
         ]);
     }
 
+    public function obtenerProgreso($sessionId)
+    {
+        $row = $this->bigQueryService->getProgreso($sessionId);
+
+        return response()->json([
+            'success' => true,
+            'pantalla_actual' => $row['pantalla_actual'] ?? 'intro',
+        ]);
+    }
+
+    public function guardarProgreso(Request $request, $sessionId)
+    {
+        $pantalla = $request->input('pantalla_actual', 'intro');
+
+        $this->bigQueryService->updateProgreso($sessionId, $pantalla);
+
+        return response()->json(['success' => true]);
+    }
+
     /**
      * 🆕 PASO 1: Guardar "DATOS" (correo, modalidad, etc)
      * Se ejecuta cuando hace click en "Continuar" en vista "datos"
@@ -277,6 +296,14 @@ class FormularioController extends Controller
             $resumen = $this->formProcessing->calcularResumen($secciones, $kpis);
             $resumenAreas = $resumen['resumen_areas'];
             $totales = ['puntaje' => $resumen['puntos_totales'], 'estrellas' => $resumen['estrellas']];
+            $tiendaCompleta = $registroBQ['tienda'] ?? '';
+            $pais = $registroBQ['pais'] ?? '';
+
+            $crmIdTienda = trim(Str::before($tiendaCompleta, ' '));
+            $crmIdTiendaCompleto = $pais . $crmIdTienda;
+
+            $correoTienda = $this->dataFetch->obtenerCorreoTienda($crmIdTiendaCompleto, $pais);
+            $correoJefe   = $this->dataFetch->obtenerCorreoJefe($pais);
 
             // 🆕 PREPARAR DATOS PARA ACTUALIZAR BIGQUERY
             $datosFinales = [
@@ -288,6 +315,9 @@ class FormularioController extends Controller
                 'puntos_totales' => $totales['puntaje'],
                 'estrellas' => $totales['estrellas'],
             ];
+
+            $datosFinales['correo_tienda'] = $correoTienda;
+            $datosFinales['correo_jefe_zona'] = $correoJefe;
 
             // 🆕 GUARDAR EN BIGQUERY USANDO EL SERVICIO
             $resultado = $this->bigQueryService->actualizarPlanesYFinalizar($sessionId, $datosFinales);

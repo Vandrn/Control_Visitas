@@ -16,6 +16,47 @@ $(document).ready(function () {
         return palabrasClaveTecnicas.some(palabra => mensaje.includes(palabra));
     }
 
+    // mostrar una pantalla por id
+    function mostrarPantalla(id) {
+        const pantallas = [
+            'intro','datos','seccion-1',
+            'intro-2','preguntas-2','seccion-2',
+            'intro-3','preguntas-3','seccion-3',
+            'intro-4','preguntas-4','seccion-4',
+            'intro-5','preguntas-5','seccion-5',
+            'seccion-6','seccion-7'
+        ];
+
+        pantallas.forEach(pid => {
+            const el = document.getElementById(pid);
+            if (el) el.style.display = 'none';
+        });
+
+        const target = document.getElementById(id);
+        if (target) target.style.display = 'block';
+    }
+
+    //guardar progreso 
+    function getSessionId() {
+        return formularioSessionId || sessionStorage.getItem('form_session_id');
+    }
+
+    async function guardarProgreso(pantalla) {
+        const sessionId = getSessionId();
+        if (!sessionId) return;
+        await fetch(`/form/progreso/${sessionId}`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({ pantalla_actual: pantalla })
+        });
+    }
+
+
+
     // 🆕 FUNCIÓN PARA LIMPIAR MENSAJE DE ERROR
     function obtenerMensajeUsuario(errorMessage, tipo = 'error') {
         console.error('❌ Error capturado:', errorMessage);
@@ -225,6 +266,24 @@ $(document).ready(function () {
                 elemento.hide();
             }
         });
+    }
+
+    async function restaurarProgreso() {
+        const sessionId = getSessionId();
+        if (!sessionId) return;
+
+        try {
+            const res = await fetch(`/form/progreso/${sessionId}`, { credentials: 'same-origin' });
+            const data = await res.json();
+            const pantalla = data.pantalla_actual || data.pantallaActual || data.pantalla;
+            if (data.success && pantalla) {
+                const idx = secciones.indexOf(pantalla);
+                if (idx >= 0) indiceActual = idx;
+            }
+            modalidadSeleccionada = $('#modalidad_visita').val() || modalidadSeleccionada;
+        } catch (e) {
+            console.warn('No se pudo restaurar progreso', e);
+        }
     }
 
     // Transformar valores de radio buttons (1-5 → 0.2-1)
@@ -628,7 +687,7 @@ $(document).ready(function () {
                 if (data.success && data.session_id) {
                     formularioSessionId = data.session_id;
                     sessionStorage.setItem('form_session_id', formularioSessionId);
-                    
+                    guardarProgreso('seccion-1');
                     console.log('✅ Registro inicial creado:', {
                         session_id: formularioSessionId
                     });
@@ -1103,8 +1162,13 @@ $(document).ready(function () {
         }).toArray();
         
         // Validar que haya modalidad seleccionada
-        if (!modalidadSeleccionada) {
-            return mostrarNotificacion("Seleccione la modalidad de la visita.", 'warning');
+        const idActual = secciones[indiceActual];
+
+        // La modalidad está en "datos", entonces solo se valida ahí
+        if (idActual === "datos") {
+            if (!$('#modalidad_visita').val() && !modalidadSeleccionada) {
+                return mostrarNotificacion("Seleccione la modalidad de la visita.", "warning");
+            }
         }
 
         // Validar correo según el nuevo select/input
@@ -1230,6 +1294,8 @@ $(document).ready(function () {
             // 📤 PASO 1: Guardar "datos" y obtener session_id
             guardarDatos().then(success => {
                 if (success) {
+                    const next = secciones[indiceActual + 1];
+                    if (next) guardarProgreso(next);
                     mostrarSeccion(++indiceActual);
                 }
             });
@@ -1237,11 +1303,15 @@ $(document).ready(function () {
             // 📤 PASO 2-7: Guardar sección individual
             guardarSeccionActual().then(success => {
                 if (success) {
+                    const next = secciones[indiceActual + 1];
+                    if (next) guardarProgreso(next);
                     mostrarSeccion(++indiceActual);
                 }
             });
         } else {
             // Intros no necesitan guardar, solo avanzar
+            const next = secciones[indiceActual + 1];
+            if (next) guardarProgreso(next);
             mostrarSeccion(++indiceActual);
         }
     });
@@ -1263,11 +1333,11 @@ $(document).ready(function () {
         }
     });
 
-    // 🆕 Inicializar subida incremental
     setupSubidaIncremental();
 
-    // Mostrar la primera sección al cargar
-    mostrarSeccion(indiceActual);
+    restaurarProgreso().finally(() => {
+        mostrarSeccion(indiceActual);
+    });
 
     /**
      * Mostrar notificaciones tipo toast
