@@ -5,7 +5,7 @@
 
     <br><br><br>
     @php
-    // 馃數 Preguntas con imagen por secci贸n seg煤n marcadas en azul
+    // Preguntas con imagen por secci贸n seg煤n marcadas en azul
     $preguntasConImagen = [
     2 => [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22], // Operaciones
     4 => [1, 2, 5, 6, 7, 8, 9], // Producto
