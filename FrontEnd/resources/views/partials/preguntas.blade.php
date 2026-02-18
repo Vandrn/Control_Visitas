@@ -49,7 +49,7 @@
             <br>
         </div>
     </div>
-    <!-- Mostrar im谩genes guardadas -->
+    <!-- Mostrar imágenes guardadas -->
     @if (!empty($imagenesGuardadas))
     <div class="imagenes-guardadas">
         @foreach ($imagenesGuardadas as $imagen)

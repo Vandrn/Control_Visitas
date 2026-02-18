@@ -12,8 +12,8 @@ Route::get('/formulario', [FormularioController::class, 'mostrarFormulario'])->n
 Route::post('/formulario', [FormularioController::class, 'mostrarFormulario'])->name('formulario');
 
 //guardar progreso
-Route::get('/form/progreso/{sessionId}', [FormularioController::class, 'obtenerProgreso']);
-Route::post('/form/progreso/{sessionId}', [FormularioController::class, 'guardarProgreso']);
+Route::get('/retail/form/progreso/{sessionId}', [FormularioController::class, 'obtenerProgreso']);
+Route::post('/retail/form/progreso/{sessionId}', [FormularioController::class, 'guardarProgreso']);
 
 // 🆕 NUEVOS ENDPOINTS POR SECCIÓN
 Route::post('retail/save-datos', [FormularioController::class, 'saveDatos'])->name('save.datos');
@@ -21,7 +21,6 @@ Route::post('retail/save-seccion', [FormularioController::class, 'saveSeccionInd
 Route::post('retail/save-main-fields', [FormularioController::class, 'saveMainFields'])->name('save.main.fields');
 Route::post('retail/save-kpis', [FormularioController::class, 'saveKPIs'])->name('save.kpis');
 Route::post('retail/save-planes', [FormularioController::class, 'savePlanes'])->name('save.planes');
-Route::post('retail/finalizar-formulario', [FormularioController::class, 'finalizarFormulario'])->name('finalizar.formulario');
 
 Route::get('/retail/keep-alive', function () {
     return response()->json(['alive' => true]);

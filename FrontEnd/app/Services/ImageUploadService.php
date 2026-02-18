@@ -144,12 +144,6 @@ class ImageUploadService
 
                 $currentSize = strlen($imageData);
 
-                Log::info("🔄 Intento compresión nativa", [
-                    'intento' => $attempts + 1,
-                    'calidad' => $quality,
-                    'tamaño_actual' => round($currentSize / (1024 * 1024), 2) . 'MB'
-                ]);
-
                 if ($currentSize <= $targetSizeBytes) {
                     break;
                 }
@@ -180,12 +174,6 @@ class ImageUploadService
             }
             $tokenUnico = session('token_unico');
 
-            $originalSize = $file->getSize() / (1024 * 1024);
-            Log::info("🔍 Procesando imagen con PHP nativo", [
-                'campo' => $nombreCampo,
-                'tamaño_original' => round($originalSize, 2) . 'MB'
-            ]);
-
             $tempPath = $file->getRealPath();
             $imageInfo = getimagesize($tempPath);
 
@@ -200,11 +188,6 @@ class ImageUploadService
             }
 
             $finalSizeMB = strlen($imageData) / (1024 * 1024);
-
-            Log::info("📦 Compresión nativa finalizada", [
-                'tamaño_final' => round($finalSizeMB, 2) . 'MB',
-                'compresión' => round((1 - $finalSizeMB / $originalSize) * 100, 1) . '%'
-            ]);
 
             // Validación final
             if ($finalSizeMB > 5.5) {
@@ -241,11 +224,6 @@ class ImageUploadService
                 config('services.google.storage_bucket'),
                 $filename
             );
-
-            Log::info("🎉 Imagen subida con PHP nativo", [
-                'url' => $publicUrl,
-                'tamaño_final' => round($finalSizeMB, 2) . 'MB'
-            ]);
 
             return $publicUrl;
         } catch (\Exception $e) {

@@ -798,18 +798,36 @@ class BigQueryService
     private function generarHTMLResumen($sessionId, $datosFinales = [])
     {
         try {
-            // 1) Traer registro completo de BigQuery
-            $sql = sprintf(
-                'SELECT * FROM `%s.%s.%s` WHERE session_id = @session_id LIMIT 1',
-                config('services.google.project_id'),
-                $this->dataset,
-                $this->table
-            );
+            // 1) Construir $datos desde $datosFinales (ya disponible, evita dependencia de BQ)
+            $datos = [
+                'tienda'           => $datosFinales['tienda'] ?? 'N/A',
+                'zona'             => $datosFinales['zona'] ?? 'N/A',
+                'pais'             => $datosFinales['pais'] ?? 'N/A',
+                'correo_realizo'   => $datosFinales['correo_realizo'] ?? 'N/A',
+                'correo_tienda'    => $datosFinales['correo_tienda'] ?? '',
+                'correo_jefe_zona' => $datosFinales['correo_jefe_zona'] ?? '',
+                'fecha_hora_fin'   => $datosFinales['fecha_hora_fin'] ?? now()->toIso8601String(),
+                'secciones'        => $datosFinales['secciones'] ?? [],
+                'kpis'             => $datosFinales['kpis'] ?? [],
+                'planes'           => $datosFinales['planes'] ?? [],
+                'resumen_areas'    => $datosFinales['resumen_areas'] ?? [],
+                'puntos_totales'   => $datosFinales['puntos_totales'] ?? 0,
+                'estrellas'        => $datosFinales['estrellas'] ?? 0,
+            ];
 
-            $queryJobConfig = $this->bigQuery->query($sql)
-                ->parameters(['session_id' => $sessionId])
-                ->useLegacySql(false)
-                ->location('US');
+            // 2) Intentar enriquecer con datos frescos de BigQuery (opcional — no bloquea si falla)
+            try {
+                $sql = sprintf(
+                    'SELECT * FROM `%s.%s.%s` WHERE session_id = @session_id LIMIT 1',
+                    config('services.google.project_id'),
+                    $this->dataset,
+                    $this->table
+                );
+
+                $queryJobConfig = $this->bigQuery->query($sql)
+                    ->parameters(['session_id' => $sessionId])
+                    ->useLegacySql(false)
+                    ->location('US');
 
             $queryJob = $this->bigQuery->runQuery($queryJobConfig);
             $queryJob->waitUntilComplete();
@@ -819,115 +837,98 @@ class BigQueryService
                 return null;
             }
 
-            $registro = null;
-            foreach ($queryJob->rows() as $row) {
-                $registro = $row;
-                break;
-            }
-
-            if (!$registro) {
-                Log::warning('⚠️ No se encontró registro en BigQuery', ['session_id' => $sessionId]);
-                return null;
-            }
-
-            // 2) Base data para el HTML
-            $datos = [
-                'tienda' => $registro['tienda'] ?? 'N/A',
-                'fecha_hora_fin' => $registro['fecha_hora_fin'] ?? ($datosFinales['fecha_hora_fin'] ?? now()->toIso8601String()),
-                'zona' => $registro['zona'] ?? 'N/A',
-                'pais' => $registro['pais'] ?? 'N/A',
-
-                'secciones' => [],
-                'kpis' => [],
-                'planes' => [],
-                'resumen_areas' => [],
-                'puntos_totales' => 0,
-                'estrellas' => 0,
-
-                //correos para el HTML
-                'correo_realizo' => $registro['correo_realizo'] ?? 'N/A',
-                'correo_tienda' => $registro['correo_tienda'] ?? ($datosFinales['correo_tienda'] ?? ''),
-                'correo_jefe_zona' => $registro['correo_jefe_zona'] ?? ($datosFinales['correo_jefe_zona'] ?? '')
-            ];
-
-            // 3) Secciones
-            if (!empty($registro['secciones'])) {
-                $seccionesArray = is_string($registro['secciones'])
-                    ? json_decode($registro['secciones'], true)
-                    : $registro['secciones'];
-
-                if (is_array($seccionesArray)) {
-                    $datos['secciones'] = $seccionesArray;
+                $registro = null;
+                if ($queryJob->isComplete()) {
+                    foreach ($queryJob->rows() as $row) {
+                        $registro = $row;
+                        break;
+                    }
                 }
-            }
 
-            // 4) KPIs
-            if (!empty($registro['kpis'])) {
-                $kpisArray = is_string($registro['kpis'])
-                    ? json_decode($registro['kpis'], true)
-                    : $registro['kpis'];
+                if ($registro) {
+                    // Enriquecer campos base con los datos de BQ
+                    $datos['tienda']         = $registro['tienda'] ?? $datos['tienda'];
+                    $datos['zona']           = $registro['zona'] ?? $datos['zona'];
+                    $datos['pais']           = $registro['pais'] ?? $datos['pais'];
+                    $datos['correo_realizo'] = $registro['correo_realizo'] ?? $datos['correo_realizo'];
+                    $datos['fecha_hora_fin'] = $registro['fecha_hora_fin'] ?? $datos['fecha_hora_fin'];
 
-                if (is_array($kpisArray)) {
-                    $datos['kpis'] = $kpisArray;
-                }
-            }
-
-            // 5) Planes (BigQuery puede devolver ARRAY<STRUCT> como objetos)
-            if (!empty($registro['planes'])) {
-                $planesRaw = is_string($registro['planes'])
-                    ? json_decode($registro['planes'], true)
-                    : $registro['planes'];
-
-                $planesNormalizados = [];
-
-                if (is_array($planesRaw)) {
-                    foreach ($planesRaw as $plan) {
-                        if (is_object($plan)) {
-                            $planesNormalizados[] = [
-                                'descripcion' => $plan->descripcion ?? '',
-                                'fecha_cumplimiento' => $plan->fecha_cumplimiento ?? ''
-                            ];
-                        } elseif (is_array($plan)) {
-                            $planesNormalizados[] = [
-                                'descripcion' => $plan['descripcion'] ?? '',
-                                'fecha_cumplimiento' => $plan['fecha_cumplimiento'] ?? ''
-                            ];
+                    // Secciones desde BQ (más fiables)
+                    if (!empty($registro['secciones'])) {
+                        $seccionesArray = is_string($registro['secciones'])
+                            ? json_decode($registro['secciones'], true)
+                            : $registro['secciones'];
+                        if (is_array($seccionesArray)) {
+                            $datos['secciones'] = $seccionesArray;
                         }
                     }
-                }
 
-                $datos['planes'] = $planesNormalizados;
-            }
+                    // KPIs desde BQ
+                    if (!empty($registro['kpis'])) {
+                        $kpisArray = is_string($registro['kpis'])
+                            ? json_decode($registro['kpis'], true)
+                            : $registro['kpis'];
+                        if (is_array($kpisArray)) {
+                            $datos['kpis'] = $kpisArray;
+                        }
+                    }
 
-            // 6) ✅ Resumen (opción A): leer de BigQuery
-            // resumen_areas es JSON type en BQ: puede venir como string JSON o como "algo" casteable
-            if (!empty($registro['resumen_areas'])) {
-                if (is_string($registro['resumen_areas'])) {
-                    $decoded = json_decode($registro['resumen_areas'], true);
-                    if (is_array($decoded)) {
-                        $datos['resumen_areas'] = $decoded;
+                    // Planes desde BQ (normalizando objetos)
+                    if (!empty($registro['planes'])) {
+                        $planesRaw = is_string($registro['planes'])
+                            ? json_decode($registro['planes'], true)
+                            : $registro['planes'];
+
+                        if (is_array($planesRaw)) {
+                            $planesNormalizados = [];
+                            foreach ($planesRaw as $plan) {
+                                if (is_object($plan)) {
+                                    $planesNormalizados[] = [
+                                        'descripcion'       => $plan->descripcion ?? '',
+                                        'fecha_cumplimiento' => $plan->fecha_cumplimiento ?? ''
+                                    ];
+                                } elseif (is_array($plan)) {
+                                    $planesNormalizados[] = [
+                                        'descripcion'       => $plan['descripcion'] ?? '',
+                                        'fecha_cumplimiento' => $plan['fecha_cumplimiento'] ?? ''
+                                    ];
+                                }
+                            }
+                            $datos['planes'] = $planesNormalizados;
+                        }
+                    }
+
+                    // Resumen desde BQ
+                    if (!empty($registro['resumen_areas'])) {
+                        if (is_string($registro['resumen_areas'])) {
+                            $decoded = json_decode($registro['resumen_areas'], true);
+                            if (is_array($decoded)) {
+                                $datos['resumen_areas'] = $decoded;
+                            }
+                        } elseif (is_array($registro['resumen_areas'])) {
+                            $datos['resumen_areas'] = $registro['resumen_areas'];
+                        } elseif (is_object($registro['resumen_areas'])) {
+                            $datos['resumen_areas'] = json_decode(json_encode($registro['resumen_areas']), true) ?? [];
+                        }
+                    }
+
+                    if (isset($registro['puntos_totales']) && $registro['puntos_totales'] !== null) {
+                        $datos['puntos_totales'] = (float) $registro['puntos_totales'];
+                    }
+                    if (isset($registro['estrellas']) && $registro['estrellas'] !== null) {
+                        $datos['estrellas'] = (int) $registro['estrellas'];
                     }
                 } else {
-                    // Si viene como array/objeto ya listo
-                    $tmp = $registro['resumen_areas'];
-                    if (is_array($tmp)) {
-                        $datos['resumen_areas'] = $tmp;
-                    } elseif (is_object($tmp)) {
-                        // convertir object -> array de forma safe
-                        $datos['resumen_areas'] = json_decode(json_encode($tmp), true) ?? [];
-                    }
+                    Log::warning('⚠️ BQ no devolvió registro para HTML — usando datosFinales', ['session_id' => $sessionId]);
                 }
+            } catch (\Exception $eBq) {
+                Log::warning('⚠️ No se pudo consultar BQ para enriquecer HTML — usando datosFinales', [
+                    'session_id' => $sessionId,
+                    'error' => $eBq->getMessage()
+                ]);
             }
 
-            // puntos_totales FLOAT, estrellas INT
-            if (isset($registro['puntos_totales']) && $registro['puntos_totales'] !== null) {
-                $datos['puntos_totales'] = (float) $registro['puntos_totales'];
-            }
-            if (isset($registro['estrellas']) && $registro['estrellas'] !== null) {
-                $datos['estrellas'] = (int) $registro['estrellas'];
-            }
-
-            // 7) Fallback por si resumen aún no existe (o vino vacío)
+            // 3) Fallback de resumen si aún está vacío
             if (empty($datos['resumen_areas']) || $datos['puntos_totales'] == 0) {
                 try {
                     $resumenCalc = $this->formProcessing->calcularResumen($datos['secciones'], $datos['kpis']);
@@ -964,7 +965,7 @@ class BigQueryService
             $html = View::make('emails.visita_confirmacion', ['datos' => $datos])->render();
 
             // 9) Guardar en public/correos
-            $rutaCorreos = public_path('correos');
+            $rutaCorreos = env('CORREOS_PUBLIC_PATH', public_path('correos'));
             if (!is_dir($rutaCorreos)) {
                 mkdir($rutaCorreos, 0755, true);
             }

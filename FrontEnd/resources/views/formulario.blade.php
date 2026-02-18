@@ -8,7 +8,12 @@
     <title>Control de Visitas</title>
     <link rel="stylesheet" href="{{ asset('css/formulario1.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="{{ asset('js/formulario1.js') }}" defer></script>
+    <script src="{{ asset('js/modules/config.js') }}" defer></script>
+    <script src="{{ asset('js/modules/ui.js') }}" defer></script>
+    <script src="{{ asset('js/modules/geo.js') }}" defer></script>
+    <script src="{{ asset('js/modules/imagenes.js') }}" defer></script>
+    <script src="{{ asset('js/modules/api.js') }}" defer></script>
+    <script src="{{ asset('js/modules/navegacion.js') }}" defer></script>
 
     <!-- 📍 ESTILOS ADICIONALES PARA VALIDACIÓN DE DISTANCIA -->
     <style>
@@ -95,7 +100,7 @@
     <div style="height: 80px;"></div>
 </body>
 <footer class="footer-banner">
-    <img src="{{ asset('images/banner.png') }}" alt="logos" id="logos" class="logo-banner">
+    <img src="{{ asset('images/banner.jpg') }}" alt="logos" id="logos" class="logo-banner">
 </footer>
 
 </html>

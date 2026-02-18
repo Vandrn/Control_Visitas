@@ -22,7 +22,7 @@
             <option value="yilka.miranda@empresasadoc.com">yilka.miranda@empresasadoc.com</option>
             <option value="otro">Otro...</option>
         </select>
-        <input type="email" id="correo_tienda_otro" name="correo_tienda" class="form-control mt-2" placeholder="Escribe el correo de la persona que realiz贸 la visita" style="display:none;" pattern="^[a-zA-Z0-9._%+\-]+@empresasadoc.com$">
+        <input type="email" id="correo_tienda_otro" name="correo_tienda" class="form-control mt-2" placeholder="Escribe el correo de la persona que realizó la visita" style="display:none;" pattern="^[a-zA-Z0-9._%+\-]+@empresasadoc.com$">
     </div>
 
     <div class="form-group" id="modalidad-group">

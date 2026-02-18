@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use App\Helpers\EvaluacionHelper;
 use App\Services\BigQueryService;
 use App\Services\ImageUploadService;
 use App\Services\TechnicalErrorLogger;
@@ -51,14 +50,6 @@ class FormularioController extends Controller
         $this->errorLogger = $errorLogger;
         $this->dataFetch = $dataFetch;
         $this->formProcessing = $formProcessing;
-        
-        Log::info('✅ Servicios inicializados', [
-            'BigQueryService' => 'OK',
-            'ImageUploadService' => 'OK',
-            'TechnicalErrorLogger' => 'OK',
-            'DataFetchService' => 'OK',
-            'FormProcessingService' => 'OK'
-        ]);
     }
 
     public function obtenerProgreso($sessionId)
@@ -135,11 +126,9 @@ class FormularioController extends Controller
                 return response()->json(['success' => false, 'message' => 'Faltan session_id o nombre_seccion'], 400);
             }
 
-            Log::info('📤 Guardando sección individual', [
+            Log::info('📋 Detalle preguntas recibidas [' . $nombreSeccion . ']', [
                 'session_id' => $sessionId,
-                'seccion' => $nombreSeccion,
-                'preguntas_count' => count($preguntas),
-                'main_fields_count' => count($mainFields)
+                'preguntas' => $preguntas
             ]);
 
             $resultado = $this->bigQueryService->actualizarSeccion($sessionId, $nombreSeccion, $preguntas);
@@ -148,7 +137,6 @@ class FormularioController extends Controller
             ]);
 
             if (!empty($mainFields) && $resultado['success']) {
-                Log::info('🆕 Actualizando campos principales desde seccion-1', ['session_id' => $sessionId]);
                 $this->bigQueryService->actualizarCamposPrincipales($sessionId, $mainFields);
             }
 
@@ -172,11 +160,6 @@ class FormularioController extends Controller
             if (!$sessionId) {
                 return response()->json(['success' => false, 'message' => 'Falta session_id'], 400);
             }
-
-            Log::info('🆕 Guardando campos principales', [
-                'session_id' => $sessionId,
-                'campos' => array_keys($mainFields)
-            ]);
 
             $resultado = $this->bigQueryService->actualizarCamposPrincipales($sessionId, $mainFields);
             $this->errorLogger->registrarSiEsErrorTecnico('saveMainFields', $sessionId, $resultado['message'] ?? '');
@@ -208,8 +191,6 @@ class FormularioController extends Controller
                 return response()->json(['success' => false, 'message' => 'No hay KPIs válidos para guardar'], 400);
             }
 
-            Log::info('📊 Guardando KPIs', ['session_id' => $sessionId, 'kpis_count' => count($kpisValidos)]);
-
             $resultado = $this->bigQueryService->actualizarKPIs($sessionId, $kpisValidos);
             $this->errorLogger->registrarSiEsErrorTecnico('saveKPIs', $sessionId, $resultado['message'] ?? '');
             
@@ -239,11 +220,6 @@ class FormularioController extends Controller
                     'message' => 'Falta session_id'
                 ], 400);
             }
-
-            Log::info('📋 GUARDAR PLANES - Obteniendo datos reales de BigQuery', [
-                'session_id' => $sessionId,
-                'planes_recibidos' => count($planesEnviados)
-            ]);
 
             // 🆕 CONSULTAR BigQuery para obtener datos REALES (no los del frontend)
             $registroBQ = $this->bigQueryService->obtenerRegistro($sessionId);
@@ -286,11 +262,16 @@ class FormularioController extends Controller
                 }
             }
 
-            Log::info('📊 Datos obtenidos de BigQuery', [
-                'session_id' => $sessionId,
-                'secciones_count' => count($secciones),
-                'kpis_count' => count($kpis),
-                'planes_recibidos' => count($planesEnviados)
+            Log::info('📋 RESUMEN COMPLETO DE LA VISITA [' . $sessionId . ']', [
+                'session_id'  => $sessionId,
+                'tienda'      => $registroBQ['tienda'] ?? '',
+                'pais'        => $registroBQ['pais'] ?? '',
+                'zona'        => $registroBQ['zona'] ?? '',
+                'correo'      => $registroBQ['correo_realizo'] ?? '',
+                'modalidad'   => $registroBQ['modalidad_visita'] ?? '',
+                'secciones'   => $secciones,
+                'kpis'        => $kpis,
+                'planes'      => $planesEnviados,
             ]);
 
             $resumen = $this->formProcessing->calcularResumen($secciones, $kpis);
@@ -318,6 +299,10 @@ class FormularioController extends Controller
 
             $datosFinales['correo_tienda'] = $correoTienda;
             $datosFinales['correo_jefe_zona'] = $correoJefe;
+            $datosFinales['tienda'] = $registroBQ['tienda'] ?? '';
+            $datosFinales['zona'] = $registroBQ['zona'] ?? '';
+            $datosFinales['pais'] = $registroBQ['pais'] ?? '';
+            $datosFinales['correo_realizo'] = $registroBQ['correo_realizo'] ?? '';
 
             // 🆕 GUARDAR EN BIGQUERY USANDO EL SERVICIO
             $resultado = $this->bigQueryService->actualizarPlanesYFinalizar($sessionId, $datosFinales);
@@ -332,14 +317,6 @@ class FormularioController extends Controller
                 return response()->json($resultado, 400);
             }
 
-            Log::info('✅ Planes guardados y formulario finalizado exitosamente', [
-                'session_id' => $sessionId,
-                'planes_guardados' => count($planesEnviados),
-                'puntos_calculados' => $totales['puntaje'],
-                'estrellas_calculadas' => $totales['estrellas'],
-                'html_ruta' => $resultado['html_ruta'] ?? 'N/A'
-            ]);
-
             return response()->json($resultado);
 
         } catch (\Exception $e) {
@@ -348,89 +325,6 @@ class FormularioController extends Controller
             Log::error('❌ Error en savePlanes', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
-        }
-    }
-
-    /**
-     * 🆕 PASO FINAL: Completar formulario
-     * Se ejecuta al final después de guardar Planes
-     * ⚠️ IMPORTANTE: Los KPIS ya se guardaron en saveKPIs() y PLANES en savePlanes()
-     * Aquí se calculan RESUMEN y se marca fecha_hora_fin, pero SIN duplicar KPIs/Planes
-     */
-    public function finalizarFormulario(Request $request)
-    {
-        try {
-            $sessionId = $request->input('session_id');
-            $kpis = $request->input('kpis', []); // Para calcular promedios, pero NO se envía a BQ
-            $secciones = $request->input('secciones', []);
-            $planes = $request->input('planes', []); // 🆕 RECIBIR LOS PLANES TAMBIÉN
-
-            if (!$sessionId) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Falta session_id'
-                ], 400);
-            }
-
-            // Calcular promedios y totales usando secciones y kpis (SOLO para el resumen)
-            $promediosPorArea = EvaluacionHelper::calcularPromediosPorArea($secciones, $kpis);
-            $totales = EvaluacionHelper::calcularTotalPonderado($promediosPorArea);
-
-            $resumenAreas = [];
-            foreach ($promediosPorArea as $area => $info) {
-                $resumenAreas[] = [
-                    'nombre' => ucfirst($area),
-                    'puntos' => $info['promedio'] ?? 'N/A',
-                    'estrellas' => isset($info['promedio']) ? intval(round($info['promedio'] / 0.2)) : 'N/A',
-                ];
-            }
-
-            // 🆕 INCLUIR PLANES EN DATOS FINALES PARA GENERAR HTML
-            $datosFinales = [
-                'fecha_hora_fin' => now()->toIso8601String(),
-                'kpis' => [], // Vacío - ya guardados en saveKPIs()
-                'planes' => $planes, // 🆕 INCLUIR PLANES PARA GENERAR HTML
-                'resumen_areas' => $resumenAreas,
-                'puntos_totales' => $totales['puntaje'],
-                'estrellas' => $totales['estrellas']
-            ];
-
-            Log::info('✅ Finalizando formulario', [
-                'session_id' => $sessionId,
-                'fecha_fin' => $datosFinales['fecha_hora_fin'],
-                'puntos_totales' => $totales['puntaje'],
-                'estrellas' => $totales['estrellas'],
-                'planes_count' => count($planes)
-            ]);
-
-            // Si vienen planes en la request, guardarlos explícitamente antes de finalizar
-            if (!empty($planes)) {
-                Log::info('📥 Se reciben planes en finalizarFormulario, guardando en BigQuery', [
-                    'session_id' => $sessionId,
-                    'planes_count' => count($planes)
-                ]);
-
-                $resPlanes = $this->bigQueryService->actualizarPlanes($sessionId, $planes);
-                $this->errorLogger->registrarSiEsErrorTecnico('finalizarFormulario.actualizarPlanes', $sessionId, $resPlanes['message'] ?? '');
-
-                if (empty($resPlanes['success']) || $resPlanes['success'] === false) {
-                    Log::warning('⚠️ No se pudieron guardar los planes durante finalizarFormulario', [
-                        'session_id' => $sessionId,
-                        'respuesta_planes' => $resPlanes
-                    ]);
-                }
-            }
-
-            $resultado = $this->bigQueryService->finalizarFormulario($sessionId, $datosFinales);
-
-            return response()->json($resultado);
-        } catch (\Exception $e) {
-            Log::error('❌ Error en finalizarFormulario', [
-                'error' => $e->getMessage(),
-                'session_id' => $request->input('session_id', 'N/A')
             ]);
 
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
@@ -468,25 +362,23 @@ class FormularioController extends Controller
             $fieldName = $request->input('field_name');
 
             if (!$request->hasFile('image')) {
-                return response()->json(['error' => 'No se recibió ninguna imagen'], 400);
+                return response()->json(['success' => false, 'message' => 'No se recibió ninguna imagen'], 400);
             }
 
             $file = $request->file('image');
             $validacionTamano = $this->imageUpload->validarTamano($file);
             if (!$validacionTamano['valid']) {
-                return response()->json(['error' => $validacionTamano['error']], 413);
+                return response()->json(['success' => false, 'message' => $validacionTamano['error']], 413);
             }
 
             $validacionTipo = $this->imageUpload->validarTipo($file);
             if (!$validacionTipo['valid']) {
-                return response()->json(['error' => $validacionTipo['error']], 415);
+                return response()->json(['success' => false, 'message' => $validacionTipo['error']], 415);
             }
 
             if (!session()->has('token_unico')) {
                 session(['token_unico' => Str::uuid()->toString()]);
             }
-
-            Log::info("📤 Subiendo imagen individual", ['field_name' => $fieldName]);
 
             $publicUrl = $this->imageUpload->subirImagenOptimizada($file, $fieldName);
 
@@ -499,100 +391,12 @@ class FormularioController extends Controller
                     'message' => 'Imagen subida correctamente'
                 ]);
             } else {
-                return response()->json(['error' => 'Error al subir la imagen al storage'], 500);
+                return response()->json(['success' => false, 'message' => 'Error al subir la imagen al storage'], 500);
             }
         } catch (\Exception $e) {
             Log::error('❌ Error en subida incremental', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Error interno: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Error interno: ' . $e->getMessage()], 500);
         }
     }
 
-    public function guardarSeccion(Request $request)
-    {
-        try {
-            set_time_limit(180);
-            if (!session()->has('token_unico')) {
-                session(['token_unico' => Str::uuid()->toString()]);
-            }
-            
-            $formId = session('token_unico');
-            $tiendaCompleta = $request->input('tienda');
-            $correoOriginal = $request->input('correo_realizo');
-
-            $data = [
-                'id' => uniqid(),
-                'session_id' => $formId,
-                'fecha_hora_inicio' => $request->input('fecha_hora_inicio'),
-                'fecha_hora_fin' => now(),
-                'correo_realizo' => $correoOriginal,
-                'lider_zona' => $request->input('lider_zona'),
-                'tienda' => $tiendaCompleta,
-                'ubicacion' => $request->input('ubicacion'),
-                'pais' => $request->input('pais'),
-                'zona' => $request->input('zona'),
-                'modalidad' => $request->input('modalidad_visita'),
-            ];
-
-            $data['secciones'] = $request->input('secciones', []);
-            $data['planes'] = $request->input('planes', []);
-            $data['kpis'] = $request->input('kpis', []);
-
-            // Validar imágenes obligatorias
-            $validacion = $this->formProcessing->validarImagenesObligatorias($data['secciones']);
-            if (!$validacion['valido']) {
-                return response()->json(['error' => $validacion['error']], 422);
-            }
-
-            $this->formProcessing->normalizarURLsImagenes($data['secciones']);
-
-            // === LOG ===
-            Log::info("✅ Estructura final lista para insertar", ['session_id' => $formId, 'secciones' => count($data['secciones'])]);
-
-            // === INSERTAR EN BIGQUERY USANDO BIGQUERYSERVICE ===
-            $table = $this->bigQueryService->obtenerTabla();
-            $insertResponse = $table->insertRows([['data' => $data]]);
-
-            if ($insertResponse->isSuccessful()) {
-                session()->forget('uploaded_images');
-
-                try {
-                    $crmIdTienda = trim(Str::before($tiendaCompleta, ' '));
-                    $crmIdTiendaCompleto = $data['pais'] . $crmIdTienda;
-
-                    // Obtener correos usando DataFetchService
-                    $correoTienda = $this->dataFetch->obtenerCorreoTienda($crmIdTiendaCompleto, $data['pais']);
-                    $correoJefe = $this->dataFetch->obtenerCorreoJefe($data['pais']);
-
-                    // Calcular resumen de puntuaciones usando FormProcessingService
-                    $resumen = $this->formProcessing->calcularResumen($data['secciones'], $data['kpis']);
-                    $data['resumen_areas'] = $resumen['resumen_areas'];
-                    $data['puntos_totales'] = $resumen['puntos_totales'];
-                    $data['estrellas'] = $resumen['estrellas'];
-                    $data['correo_tienda'] = $correoTienda;
-                    $data['correo_jefe_zona'] = $correoJefe;
-
-                    // Generar HTML para correo
-                    $urlHtml = $this->formProcessing->generarHTMLCorreo($data, $correoOriginal);
-
-                    return response()->json([
-                        'success' => true,
-                        'message' => 'Formulario guardado correctamente y HTML generado',
-                        'url_html' => $urlHtml
-                    ]);
-                } catch (\Exception $e) {
-                    Log::error('❌ Error al crear el correo de confirmación', ['error' => $e->getMessage()]);
-                    return response()->json(['success' => true, 'message' => 'Formulario guardado pero error en correo'], 200);
-                }
-            } else {
-                Log::error('❌ Error al insertar en BigQuery', ['errores' => $insertResponse->failedRows()]);
-                return response()->json(['error' => 'Error al insertar en BigQuery.'], 500);
-            }
-        } catch (\Exception $e) {
-            Log::error('❌ Error interno al guardar sección', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json(['error' => 'Error interno: ' . $e->getMessage()], 500);
-        }
-    }
 }

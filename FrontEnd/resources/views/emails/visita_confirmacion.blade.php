@@ -46,6 +46,13 @@
             $resumenAreas = [];
         }
     @endphp
+    @php
+      use Carbon\Carbon;
+    
+      $fechaFinLocal = $datos['fecha_hora_fin']
+        ? Carbon::parse($datos['fecha_hora_fin'])->timezone(config('app.timezone'))->format('Y-m-d H:i:s')
+        : 'N/A';
+    @endphp
     <!--
     correo_realizo: {{ $datos['correo_realizo'] ?? '' }}
     correo_tienda: {{ $datos['correo_tienda'] ?? '' }}
@@ -55,7 +62,7 @@
     <h1>📝 Resultado de la visita a {{ Str::before($datos['tienda'], ' -') }}</h1>
 
     <p>
-        <strong>Fecha:</strong> {{ $datos['fecha_hora_fin'] }}<br>
+        <strong>Fecha:</strong> {{ $fechaFinLocal }}<br>
         <strong>Zona:</strong> {{ $datos['zona'] }}<br>
         <strong>País:</strong> {{ $datos['pais'] }}<br>
         <strong>Puntaje Total:</strong> {{ $datos['puntos_totales'] ?? 'N/A' }}
@@ -81,9 +88,9 @@
 
 
 
-    @foreach($seccion['preguntas'] as $preg)
+    @foreach($seccion['preguntas'] ?? [] as $preg)
     @php
-    $esObservacion = \Illuminate\Support\Str::startsWith($preg['codigo_pregunta'], 'OBS_');
+    $esObservacion = \Illuminate\Support\Str::startsWith(strtoupper($preg['codigo_pregunta'] ?? ''), 'OBS_');
     $nombre = \App\Helpers\PreguntaHelper::nombreBonito($preg['codigo_pregunta']);
     @endphp
 
