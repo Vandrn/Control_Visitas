@@ -222,6 +222,7 @@ class FormularioController extends Controller
             }
 
             // 🆕 CONSULTAR BigQuery para obtener datos REALES (no los del frontend)
+            Log::info('🔍 Consultando BigQuery para obtener datos de la visita', ['session_id' => $sessionId]);
             $registroBQ = $this->bigQueryService->obtenerRegistro($sessionId);
 
             if (!$registroBQ) {
@@ -269,6 +270,9 @@ class FormularioController extends Controller
                 'zona'        => $registroBQ['zona'] ?? '',
                 'correo'      => $registroBQ['correo_realizo'] ?? '',
                 'modalidad'   => $registroBQ['modalidad_visita'] ?? '',
+                'secciones_count' => count($secciones),
+                'kpis_count'      => count($kpis),
+                'planes_count'    => count($planesEnviados),
                 'secciones'   => $secciones,
                 'kpis'        => $kpis,
                 'planes'      => $planesEnviados,

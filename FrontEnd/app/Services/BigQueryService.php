@@ -829,13 +829,8 @@ class BigQueryService
                     ->useLegacySql(false)
                     ->location('US');
 
-            $queryJob = $this->bigQuery->runQuery($queryJobConfig);
-            $queryJob->waitUntilComplete();
-
-            if (!$queryJob->isComplete()) {
-                Log::warning('⚠️ Query para obtener datos no se completó', ['session_id' => $sessionId]);
-                return null;
-            }
+                $queryJob = $this->bigQuery->runQuery($queryJobConfig);
+                $queryJob->waitUntilComplete();
 
                 $registro = null;
                 if ($queryJob->isComplete()) {
