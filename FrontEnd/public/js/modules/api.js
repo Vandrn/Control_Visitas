@@ -19,6 +19,14 @@ async function guardarProgreso(pantalla) {
 async function restaurarProgreso() {
     var sid = getSessionId();
     if (!sid) return;
+
+    // Restaurar formularioSessionId y sessionStorage desde localStorage si es necesario
+    if (sid && !formularioSessionId) {
+        formularioSessionId = sid;
+        sessionStorage.setItem('form_session_id', sid);
+        console.log('♻️ [SESIÓN] Restaurada desde localStorage:', sid);
+    }
+
     try {
         var res  = await fetch('/retail/form/progreso/' + sid, { credentials: 'same-origin' });
         var data = await res.json();
@@ -91,14 +99,15 @@ function guardarDatos() {
         })();
 
         var payload = {
-            fecha_hora_inicio:  $("#fecha_inicio").val(),
-            correo_realizo:     correo,
-            lider_zona:         $("#jefe_zona").val(),
-            tienda:             tiendaVal,
-            ubicacion:          $("#ubicacion").val(),
-            pais:               paisVal,
-            zona:               zonaVal,
-            modalidad_visita:   $('#modalidad_visita').val()
+            fecha_hora_inicio:   $("#fecha_inicio").val(),
+            correo_realizo:      correo,
+            lider_zona:          $("#jefe_zona").val(),
+            tienda:              tiendaVal,
+            ubicacion:           $("#ubicacion").val(),
+            pais:                paisVal,
+            zona:                zonaVal,
+            modalidad_visita:    $('#modalidad_visita').val(),
+            existing_session_id: localStorage.getItem('form_session_id') || null
         };
 
         console.log('📤 [DATOS] Enviando datos iniciales:', payload);
@@ -110,6 +119,7 @@ function guardarDatos() {
                 if (data.success && data.session_id) {
                     formularioSessionId = data.session_id;
                     sessionStorage.setItem('form_session_id', formularioSessionId);
+                    localStorage.setItem('form_session_id', formularioSessionId);
                     guardarProgreso('seccion-1');
                     console.log('✅ [DATOS] Guardados correctamente. session_id:', formularioSessionId);
                     _onSuccess(notif, 'Datos guardados correctamente', resolve);
@@ -251,12 +261,14 @@ function _guardarPlanes(resolve) {
 
     var seccionesAcumuladas = JSON.parse(sessionStorage.getItem('form_secciones') || '{}');
     var kpisAcumulados      = JSON.parse(sessionStorage.getItem('form_kpis') || '[]');
+    var totalImgs = Object.keys(imagenesSubidas).reduce(function(sum, k) { return sum + (imagenesSubidas[k] ? imagenesSubidas[k].length : 0); }, 0);
 
     var payload = {
         session_id: formularioSessionId,
         planes:     planes,
         secciones:  seccionesAcumuladas,
-        kpis:       kpisAcumulados
+        kpis:       kpisAcumulados,
+        total_imagenes: totalImgs
     };
 
     console.log('📤 [PLANES] Enviando planes:', planes);
@@ -281,6 +293,7 @@ function _guardarPlanes(resolve) {
                 actualizarNotificacionPermanente(notif, 'Formulario completado exitosamente', 'success');
                 setTimeout(function() {
                     sessionStorage.clear();
+                    localStorage.removeItem('form_session_id');
                     var href = window.location.href;
                     window.location.href = href + (href.indexOf('?') > -1 ? '&' : '?') + 'nocache=' + Date.now();
                 }, 1500);
@@ -306,28 +319,53 @@ function _guardarSeccionGenerica(seccionId, resolve) {
     // Validar imágenes obligatorias en Operaciones
     if (seccionId === 'seccion-2') {
         var faltantes = [];
-        $seccion.find("input[type='file']").not("input[name='IMG_OBS_OPE']").each(function() {
+        $seccion.find("input[type='file']").each(function() {
             var fn = $(this).attr('name').replace(/\[\]$/, '');
-            if (!imagenesSubidas[fn] || imagenesSubidas[fn].length === 0) faltantes.push(fn);
+            if (fn.startsWith('IMG_OBS_')) return; // imágenes de observación son opcionales
+            if (!imagenesSubidas[fn] || imagenesSubidas[fn].length === 0) {
+                var match = fn.match(/IMG_\d+_(\d+)/);
+                faltantes.push('Pregunta ' + (match ? parseInt(match[1], 10) : fn));
+            }
         });
         if (faltantes.length > 0) {
-            mostrarNotificacion('Por favor, sube todas las imágenes requeridas para continuar.', 'warning');
+            mostrarNotificacion('Faltan imágenes en: ' + faltantes.join(', '), 'warning');
             resolve(false); return;
         }
     }
 
-    // Validar imágenes de Producto (solo si no es "No aplica")
+    // Validar imágenes de Producto
     if (seccionId === 'seccion-4') {
         var faltantes4 = [];
-        ['preg_04_07', 'preg_04_08'].forEach(function(fn) {
-            var val = $('input[name="' + fn + '"]:checked').val();
-            if (val && val !== 'NA' && val.trim() !== '') {
-                var imgFn = fn.replace('preg_', 'IMG_');
-                if (!imagenesSubidas[imgFn] || imagenesSubidas[imgFn].length === 0) faltantes4.push(imgFn);
+        [1, 2, 5, 6, 7, 8, 9].forEach(function(num) {
+            var padded = String(num).padStart(2, '0');
+            var val = $('input[name="preg_04_' + padded + '"]:checked').val();
+            if (!val || val.trim() === '') return;
+            if ((num === 7 || num === 8) && val === 'NA') return;
+            var imgFn = 'IMG_04_' + padded;
+            if (!imagenesSubidas[imgFn] || imagenesSubidas[imgFn].length === 0) {
+                faltantes4.push('Pregunta ' + num);
             }
         });
         if (faltantes4.length > 0) {
-            mostrarNotificacion('Por favor, sube todas las imágenes requeridas para continuar.', 'warning');
+            mostrarNotificacion('Faltan imágenes en: ' + faltantes4.join(', '), 'warning');
+            resolve(false); return;
+        }
+    }
+
+    // Validar imágenes de Personal
+    if (seccionId === 'seccion-5') {
+        var faltantes5 = [];
+        [1, 9].forEach(function(num) {
+            var padded = String(num).padStart(2, '0');
+            var val = $('input[name="preg_05_' + padded + '"]:checked').val();
+            if (!val || val.trim() === '') return;
+            var imgFn = 'IMG_05_' + padded;
+            if (!imagenesSubidas[imgFn] || imagenesSubidas[imgFn].length === 0) {
+                faltantes5.push('Pregunta ' + num);
+            }
+        });
+        if (faltantes5.length > 0) {
+            mostrarNotificacion('Faltan imágenes en: ' + faltantes5.join(', '), 'warning');
             resolve(false); return;
         }
     }

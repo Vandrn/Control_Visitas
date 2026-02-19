@@ -90,6 +90,19 @@ class FormularioController extends Controller
                 'modalidad_visita' => $request->input('modalidad_visita')
             ];
 
+            $existingSessionId = $request->input('existing_session_id');
+
+            if ($existingSessionId) {
+                $resultado = $this->bigQueryService->actualizarDatosIniciales($existingSessionId, $datos);
+                if ($resultado['success']) {
+                    session(['form_session_id' => $existingSessionId]);
+                    Log::info('♻️ Sesión recuperada (sin duplicado)', ['session_id' => $existingSessionId]);
+                    return response()->json($resultado);
+                }
+                // Registro no encontrado en BQ → crear uno nuevo (fall-through)
+                Log::info('⚠️ existing_session_id no encontrado en BQ — creando nuevo registro', ['existing' => $existingSessionId]);
+            }
+
             $resultado = $this->bigQueryService->crearFormulario($datos);
 
             if ($resultado['success']) {
@@ -307,6 +320,7 @@ class FormularioController extends Controller
             $datosFinales['zona'] = $registroBQ['zona'] ?? '';
             $datosFinales['pais'] = $registroBQ['pais'] ?? '';
             $datosFinales['correo_realizo'] = $registroBQ['correo_realizo'] ?? '';
+            $datosFinales['total_imagenes'] = (int) $request->input('total_imagenes', 0);
 
             // 🆕 GUARDAR EN BIGQUERY USANDO EL SERVICIO
             $resultado = $this->bigQueryService->actualizarPlanesYFinalizar($sessionId, $datosFinales);

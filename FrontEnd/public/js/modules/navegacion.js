@@ -211,7 +211,7 @@ $(document).ready(function() {
                 return mostrarNotificacion('Faltan por subir completamente: ' + imgsPendientes.join(', '), 'warning');
             }
 
-            var totalImgs = Object.keys(imagenesSubidas).length;
+            var totalImgs = Object.keys(imagenesSubidas).reduce(function(sum, k) { return sum + (imagenesSubidas[k] ? imagenesSubidas[k].length : 0); }, 0);
             guardarSeccionActual().then(function(ok) {
                 if (ok) dataSaved = true;
             });

@@ -72,5 +72,7 @@ function getCsrfToken() {
 }
 
 function getSessionId() {
-    return formularioSessionId || sessionStorage.getItem('form_session_id');
+    return formularioSessionId
+        || sessionStorage.getItem('form_session_id')
+        || localStorage.getItem('form_session_id');
 }

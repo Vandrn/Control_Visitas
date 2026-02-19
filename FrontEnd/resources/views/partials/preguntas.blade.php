@@ -45,6 +45,7 @@
         <textarea class="texto" id="{{ $idPregunta }}" name="{{ $nombreObservacion }}" placeholder="Escriba sus observaciones aquí..." rows="4" cols="50" required></textarea>
         <br>
         <div class="file_container">
+            <label style="font-size: 0.85em; color: #666;">Imagen (opcional)</label>
             <input type="file" id="imagen_{{ $idPregunta }}" name="{{ $nombreImagen }}[]" class="form-control-file" accept="image/png, image/jpeg" multiple>
             <br>
         </div>

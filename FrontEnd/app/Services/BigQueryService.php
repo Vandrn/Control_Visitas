@@ -731,7 +731,8 @@ class BigQueryService
                     TIMESTAMP(@fecha_hora_fin) as fecha_hora_fin,
                     PARSE_JSON(@resumen_json) as resumen_areas,
                     CAST(@puntos_totales AS FLOAT64) as puntos_totales,
-                    CAST(@estrellas AS INT64) as estrellas
+                    CAST(@estrellas AS INT64) as estrellas,
+                    CAST(@total_imagenes AS INT64) as total_imagenes
                 ) S
                 ON T.session_id = S.session_id
                 WHEN MATCHED THEN
@@ -740,7 +741,8 @@ class BigQueryService
                     fecha_hora_fin = S.fecha_hora_fin,
                     resumen_areas = S.resumen_areas,
                     puntos_totales = S.puntos_totales,
-                    estrellas = S.estrellas',
+                    estrellas = S.estrellas,
+                    total_imagenes = S.total_imagenes',
                 config('services.google.project_id'),
                 $this->dataset,
                 $this->table
@@ -754,6 +756,7 @@ class BigQueryService
                     'resumen_json' => $resumenJSON,
                     'puntos_totales' => $puntosTotales,
                     'estrellas' => $estrellas,
+                    'total_imagenes' => $datosFinales['total_imagenes'] ?? 0,
                 ])
                 ->useLegacySql(false)
                 ->location('US');
@@ -985,6 +988,92 @@ class BigQueryService
                 'trace' => $e->getTraceAsString()
             ]);
             return null;
+        }
+    }
+
+    /**
+     * ♻️ ACTUALIZAR DATOS INICIALES — Recuperar sesión existente
+     * Si el session_id ya existe en BQ → UPDATE campos, devuelve mismo session_id
+     * Si no existe → devuelve success: false para que el controller haga INSERT
+     */
+    public function actualizarDatosIniciales($sessionId, $datos)
+    {
+        try {
+            // Verificar que el registro existe
+            $selectQuery = sprintf(
+                'SELECT session_id FROM `%s.%s.%s` WHERE session_id = @session_id LIMIT 1',
+                config('services.google.project_id'),
+                $this->dataset,
+                $this->table
+            );
+
+            $selectJob = $this->bigQuery->query($selectQuery)
+                ->parameters(['session_id' => $sessionId])
+                ->useLegacySql(false)
+                ->location('US');
+
+            $results = $this->bigQuery->runQuery($selectJob);
+
+            $found = false;
+            foreach ($results as $row) {
+                $found = true;
+                break;
+            }
+
+            if (!$found) {
+                Log::info('ℹ️ actualizarDatosIniciales: registro no encontrado', ['session_id' => $sessionId]);
+                return ['success' => false, 'message' => 'Registro no encontrado'];
+            }
+
+            // UPDATE campos iniciales (preserva secciones/kpis/planes existentes)
+            $mergeQuery = sprintf(
+                'MERGE `%s.%s.%s` T
+                USING (SELECT @session_id AS session_id) S
+                ON T.session_id = S.session_id
+                WHEN MATCHED THEN
+                  UPDATE SET
+                    correo_realizo = %s,
+                    lider_zona = %s,
+                    tienda = %s,
+                    ubicacion = %s,
+                    pais = %s,
+                    zona = %s,
+                    modalidad = %s,
+                    updated_at = CURRENT_TIMESTAMP()',
+                config('services.google.project_id'),
+                $this->dataset,
+                $this->table,
+                $this->escapeString($datos['correo_realizo'] ?? null),
+                $this->escapeString($datos['lider_zona'] ?? null),
+                $this->escapeString($datos['tienda'] ?? null),
+                $this->escapeString($datos['ubicacion'] ?? null),
+                $this->escapeString($datos['pais'] ?? null),
+                $this->escapeString($datos['zona'] ?? null),
+                $this->escapeString($datos['modalidad_visita'] ?? null)
+            );
+
+            $mergeJobConfig = $this->bigQuery->query($mergeQuery)
+                ->parameters(['session_id' => $sessionId])
+                ->useLegacySql(false)
+                ->location('US');
+
+            $mergeJob = $this->bigQuery->runQuery($mergeJobConfig);
+            $mergeJob->waitUntilComplete();
+
+            Log::info('✅ Datos iniciales actualizados (sesión recuperada)', ['session_id' => $sessionId]);
+
+            return [
+                'success' => true,
+                'session_id' => $sessionId,
+                'message' => 'Registro actualizado (sesión recuperada)'
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('❌ Error en actualizarDatosIniciales', [
+                'error' => $e->getMessage(),
+                'session_id' => $sessionId
+            ]);
+            return ['success' => false, 'message' => $e->getMessage()];
         }
     }
 
