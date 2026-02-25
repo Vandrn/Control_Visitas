@@ -109,11 +109,16 @@ class FormularioController extends Controller
                 session(['form_session_id' => $resultado['session_id']]);
                 return response()->json($resultado);
             } else {
-                $this->errorLogger->registrarSiEsErrorTecnico('saveDatos', 'N/A', $resultado['message']);
+                $this->errorLogger->registrarSiEsErrorTecnico('saveDatos', 'N/A', $resultado['message'], [
+                    'correo' => $datos['correo_realizo'] ?? null,
+                    'tienda' => $datos['tienda'] ?? null
+                ]);
                 return response()->json($resultado, 400);
             }
         } catch (\Exception $e) {
             $this->errorLogger->registrar('saveDatos', 'N/A', $e->getMessage(), [
+                'correo' => $datos['correo_realizo'] ?? null,
+                'tienda' => $datos['tienda'] ?? null,
                 'file' => $e->getFile(),
                 'line' => $e->getLine()
             ]);
@@ -134,6 +139,8 @@ class FormularioController extends Controller
             $nombreSeccion = $request->input('nombre_seccion');
             $preguntas = $request->input('preguntas', []);
             $mainFields = $request->input('main_fields', []);
+            $correo = $request->input('correo_realizo');
+            $tienda = $request->input('tienda');
 
             if (!$sessionId || !$nombreSeccion) {
                 return response()->json(['success' => false, 'message' => 'Faltan session_id o nombre_seccion'], 400);
@@ -146,7 +153,9 @@ class FormularioController extends Controller
 
             $resultado = $this->bigQueryService->actualizarSeccion($sessionId, $nombreSeccion, $preguntas);
             $this->errorLogger->registrarSiEsErrorTecnico('saveSeccionIndividual', $sessionId, $resultado['message'] ?? '', [
-                'seccion' => $nombreSeccion
+                'seccion' => $nombreSeccion,
+                'correo' => $correo,
+                'tienda' => $tienda
             ]);
 
             if (!empty($mainFields) && $resultado['success']) {
@@ -155,7 +164,10 @@ class FormularioController extends Controller
 
             return response()->json($resultado);
         } catch (\Exception $e) {
-            $this->errorLogger->registrar('saveSeccionIndividual', $request->input('session_id', 'N/A'), $e->getMessage());
+            $this->errorLogger->registrar('saveSeccionIndividual', $request->input('session_id', 'N/A'), $e->getMessage(), [
+                'correo' => $request->input('correo_realizo'),
+                'tienda' => $request->input('tienda')
+            ]);
             Log::error('❌ Error en saveSeccionIndividual', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
@@ -169,17 +181,25 @@ class FormularioController extends Controller
         try {
             $sessionId = $request->input('session_id');
             $mainFields = $request->input('main_fields', []);
+            $correo = $request->input('correo_realizo');
+            $tienda = $request->input('tienda');
 
             if (!$sessionId) {
                 return response()->json(['success' => false, 'message' => 'Falta session_id'], 400);
             }
 
             $resultado = $this->bigQueryService->actualizarCamposPrincipales($sessionId, $mainFields);
-            $this->errorLogger->registrarSiEsErrorTecnico('saveMainFields', $sessionId, $resultado['message'] ?? '');
+            $this->errorLogger->registrarSiEsErrorTecnico('saveMainFields', $sessionId, $resultado['message'] ?? '', [
+                'correo' => $correo,
+                'tienda' => $tienda
+            ]);
             
             return response()->json($resultado);
         } catch (\Exception $e) {
-            $this->errorLogger->registrar('saveMainFields', $request->input('session_id', 'N/A'), $e->getMessage());
+            $this->errorLogger->registrar('saveMainFields', $request->input('session_id', 'N/A'), $e->getMessage(), [
+                'correo' => $request->input('correo_realizo'),
+                'tienda' => $request->input('tienda')
+            ]);
             Log::error('❌ Error en saveMainFields', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
@@ -193,6 +213,8 @@ class FormularioController extends Controller
         try {
             $sessionId = $request->input('session_id');
             $kpis = $request->input('kpis', []);
+            $correo = $request->input('correo_realizo');
+            $tienda = $request->input('tienda');
 
             if (!$sessionId) {
                 return response()->json(['success' => false, 'message' => 'Falta session_id'], 400);
@@ -205,11 +227,17 @@ class FormularioController extends Controller
             }
 
             $resultado = $this->bigQueryService->actualizarKPIs($sessionId, $kpisValidos);
-            $this->errorLogger->registrarSiEsErrorTecnico('saveKPIs', $sessionId, $resultado['message'] ?? '');
+            $this->errorLogger->registrarSiEsErrorTecnico('saveKPIs', $sessionId, $resultado['message'] ?? '', [
+                'correo' => $correo,
+                'tienda' => $tienda
+            ]);
             
             return response()->json($resultado);
         } catch (\Exception $e) {
-            $this->errorLogger->registrar('saveKPIs', $request->input('session_id', 'N/A'), $e->getMessage());
+            $this->errorLogger->registrar('saveKPIs', $request->input('session_id', 'N/A'), $e->getMessage(), [
+                'correo' => $request->input('correo_realizo'),
+                'tienda' => $request->input('tienda')
+            ]);
             Log::error('❌ Error en saveKPIs', ['error' => $e->getMessage()]);
             return response()->json(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
         }
@@ -330,7 +358,10 @@ class FormularioController extends Controller
                     'error' => $resultado['message'],
                     'session_id' => $sessionId
                 ]);
-                $this->errorLogger->registrarSiEsErrorTecnico('savePlanes', $sessionId, $resultado['message'] ?? '');
+                $this->errorLogger->registrarSiEsErrorTecnico('savePlanes', $sessionId, $resultado['message'] ?? '', [
+                    'correo' => $registroBQ['correo_realizo'] ?? null,
+                    'tienda' => $registroBQ['tienda'] ?? null
+                ]);
                 
                 return response()->json($resultado, 400);
             }
@@ -338,7 +369,11 @@ class FormularioController extends Controller
             return response()->json($resultado);
 
         } catch (\Exception $e) {
-            $this->errorLogger->registrar('savePlanes', $request->input('session_id', 'N/A'), $e->getMessage());
+            $registroBQ = $this->bigQueryService->obtenerRegistro($request->input('session_id', 'N/A'));
+            $this->errorLogger->registrar('savePlanes', $request->input('session_id', 'N/A'), $e->getMessage(), [
+                'correo' => $registroBQ['correo_realizo'] ?? null,
+                'tienda' => $registroBQ['tienda'] ?? null
+            ]);
 
             Log::error('❌ Error en savePlanes', [
                 'error' => $e->getMessage(),

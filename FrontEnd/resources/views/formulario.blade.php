@@ -7,6 +7,13 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Control de Visitas</title>
     <link rel="stylesheet" href="{{ asset('css/formulario1.css') }}">
+    
+    <!-- 🔧 POLYFILLS PARA COMPATIBILIDAD CON NAVEGADORES ANTIGUOS -->
+    <!-- Polyfill para Promise (IE, navegadores viejos) -->
+    <script src="https://cdn.jsdelivr.net/npm/promise-polyfill@8/dist/polyfill.min.js"></script>
+    <!-- Polyfill para fetch (IE y navegadores sin soporte) -->
+    <script src="https://cdn.jsdelivr.net/npm/whatwg-fetch@3/dist/fetch.umd.js"></script>
+    
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="{{ asset('js/modules/config.js') }}" defer></script>
     <script src="{{ asset('js/modules/ui.js') }}" defer></script>

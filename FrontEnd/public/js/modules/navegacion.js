@@ -273,26 +273,55 @@ $(document).ready(function() {
         }
     });
 
-    // Keep-alive cada 3 minutos
+    // Keep-alive cada 3 minutos — Mejorado para máxima compatibilidad
     var intentosFallidosSesion = 0;
+    var keepAliveTimeout = null;
+
     setInterval(function() {
-        fetch('/retail/keep-alive', { method: 'GET', credentials: 'same-origin' })
-            .then(function(r) {
-                if (!r.ok) throw new Error('Código ' + r.status);
+        // No iniciar si ya hay una solicitud en progreso
+        if (keepAliveTimeout) return;
+
+        // Protección contra timeouts infinitos
+        keepAliveTimeout = setTimeout(function() {
+            keepAliveTimeout = null;
+            console.warn('⚠️ Keep-alive timeout - servidor no responde');
+            intentosFallidosSesion++;
+            if (intentosFallidosSesion >= 2) {
+                mostrarNotificacion('Tu sesión ha expirado o no se pudo renovar. Por favor recarga la página.', 'warning');
+            }
+        }, 5000); // Timeout de 5 segundos
+
+        $.ajax({
+            url: '/retail/keep-alive',
+            type: 'GET',
+            timeout: 5000,
+            xhrFields: { withCredentials: true },
+            dataType: 'json',
+            success: function() {
+                if (keepAliveTimeout) {
+                    clearTimeout(keepAliveTimeout);
+                    keepAliveTimeout = null;
+                }
                 intentosFallidosSesion = 0;
-            })
-            .catch(function(err) {
+                console.log('✅ Keep-alive OK');
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                if (keepAliveTimeout) {
+                    clearTimeout(keepAliveTimeout);
+                    keepAliveTimeout = null;
+                }
                 intentosFallidosSesion++;
-                console.warn('Intento fallido ' + intentosFallidosSesion + ':', err);
+                console.warn('⚠️ Intento fallido ' + intentosFallidosSesion + ' - ' + textStatus);
                 if (intentosFallidosSesion >= 2) {
                     mostrarNotificacion('Tu sesión ha expirado o no se pudo renovar. Por favor recarga la página.', 'warning');
                 }
-            });
-    }, 3 * 60 * 1000);
+            }
+        });
+    }, 3 * 60 * 1000); // Cada 3 minutos
 
     // Inicializar subida incremental y restaurar progreso
     setupSubidaIncremental();
-    restaurarProgreso().finally(function() {
+    restaurarProgreso().always(function() {
         mostrarSeccion(indiceActual);
     });
 

@@ -6,19 +6,27 @@
 // --- Progreso de sesión ---
 
 async function guardarProgreso(pantalla) {
+    // ✅ Cambio a $.ajax() para compatibilidad
     var sid = getSessionId();
     if (!sid) return;
-    await fetch('/retail/form/progreso/' + sid, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
-        body: JSON.stringify({ pantalla_actual: pantalla })
+    
+    $.ajax({
+        url: '/retail/form/progreso/' + sid,
+        type: 'POST',
+        data: JSON.stringify({ pantalla_actual: pantalla }),
+        contentType: 'application/json; charset=utf-8',
+        headers: { 'X-CSRF-TOKEN': getCsrfToken() },
+        timeout: 10000,
+        xhrFields: { withCredentials: true },
+        error: function() {
+            console.warn('⚠️ No se pudo guardar el progreso');
+        }
     });
-}
+};
 
-async function restaurarProgreso() {
+function restaurarProgreso() {
     var sid = getSessionId();
-    if (!sid) return;
+    if (!sid) return $.when(); // Retornar un Deferred vacío
 
     // Restaurar formularioSessionId y sessionStorage desde localStorage si es necesario
     if (sid && !formularioSessionId) {
@@ -27,33 +35,48 @@ async function restaurarProgreso() {
         console.log('♻️ [SESIÓN] Restaurada desde localStorage:', sid);
     }
 
-    try {
-        var res  = await fetch('/retail/form/progreso/' + sid, { credentials: 'same-origin' });
-        var data = await res.json();
-        var pantalla = data.pantalla_actual || data.pantallaActual || data.pantalla;
-        if (data.success && pantalla) {
-            var idx = SECCIONES.indexOf(pantalla);
-            if (idx >= 0) indiceActual = idx;
+    // ✅ Cambio a $.ajax() para compatibilidad
+    return $.ajax({
+        url: '/retail/form/progreso/' + sid,
+        type: 'GET',
+        dataType: 'json',
+        timeout: 10000,
+        xhrFields: { withCredentials: true }
+    })
+    .done(function(data) {
+        if (data.success || data.pantalla_actual || data.pantallaActual || data.pantalla) {
+            var pantalla = data.pantalla_actual || data.pantallaActual || data.pantalla;
+            if (pantalla) {
+                var idx = SECCIONES.indexOf(pantalla);
+                if (idx >= 0) indiceActual = idx;
+            }
+            modalidadSeleccionada = $('#modalidad_visita').val() || modalidadSeleccionada;
         }
-        modalidadSeleccionada = $('#modalidad_visita').val() || modalidadSeleccionada;
-    } catch (e) {
-        console.warn('No se pudo restaurar progreso', e);
-    }
+    })
+    .fail(function() {
+        console.warn('⚠️ No se pudo restaurar progreso');
+    });
 }
 
 // --- Helpers internos ---
 
 function _fetchPost(url, payload, notifGuardando) {
-    return fetch(url, {
-        method: 'POST',
+    // ✅ Usar $.ajax() en lugar de fetch para máxima compatibilidad
+    return $.ajax({
+        url: url,
+        type: 'POST',
+        data: JSON.stringify(payload),
+        dataType: 'json',
+        contentType: 'application/json; charset=utf-8',
         headers: {
-            'Content-Type': 'application/json',
             'X-CSRF-TOKEN': getCsrfToken(),
             'Accept': 'application/json'
         },
-        body: JSON.stringify(payload),
-        credentials: 'same-origin'
-    }).then(function(r) { return r.json(); });
+        timeout: 30000, // 30 segundos
+        xhrFields: { withCredentials: true }
+    })
+    .done(function(data) { return data; })
+    .fail(function() { return {}; });
 }
 
 function _onSuccess(notif, msg, resolve) {
